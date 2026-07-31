@@ -7,7 +7,7 @@ type ScrollFrameSequence = {
   framePath: (index: number) => string
 }
 
-const SCROLL_FRAME_EASE_POWER = 1.35
+const SCROLL_FRAME_EASE_POWER = 2.1
 
 const scrollFrameSequences = {
   landscape: {
