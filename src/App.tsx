@@ -7,6 +7,8 @@ type ScrollFrameSequence = {
   framePath: (index: number) => string
 }
 
+const SCROLL_FRAME_EASE_POWER = 1.35
+
 const scrollFrameSequences = {
   landscape: {
     id: 'landscape',
@@ -30,9 +32,11 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
-    const animatedSections = ['#inicio', '#sobre-mi', '#marcas']
-      .map((selector) => container.querySelector<HTMLElement>(selector))
-      .filter((section): section is HTMLElement => Boolean(section))
+
+    const getAnimatedSections = () =>
+      ['#inicio', '#sobre-mi', '#marcas']
+        .map((selector) => container.querySelector<HTMLElement>(selector))
+        .filter((section): section is HTMLElement => Boolean(section))
 
     let current = 0
     let target = 0
@@ -109,13 +113,16 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     }
 
     const updateTarget = () => {
+      const animatedSections = getAnimatedSections()
+
       if (animatedSections.length > 0) {
         const start = animatedSections[0].offsetTop
         const lastSection = animatedSections[animatedSections.length - 1]
         const end = lastSection.offsetTop + lastSection.offsetHeight
         const range = Math.max(end - start, 1)
+        const linearProgress = Math.min(1, Math.max(0, (window.scrollY - start) / range))
 
-        target = Math.min(1, Math.max(0, (window.scrollY - start) / range))
+        target = Math.pow(linearProgress, SCROLL_FRAME_EASE_POWER)
       } else {
         const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1)
         target = window.scrollY / maxScroll
