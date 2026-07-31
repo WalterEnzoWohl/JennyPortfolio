@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type SVGProps } from 'react'
+import { useHeroIntroAnimation } from './hooks/useHeroIntroAnimation'
 
 // ─── Decorative SVG Icons ─────────────────────────────────────────────────────
 
-function Sparkle({ size = 14, className = '' }: { size?: number; className?: string }) {
+function Sparkle({ size = 14, className = '', ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 14 14" fill="currentColor" className={className}>
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="currentColor" className={className} {...props}>
       <path d="M7 0 L8.2 5.8 L14 7 L8.2 8.2 L7 14 L5.8 8.2 L0 7 L5.8 5.8 Z" />
     </svg>
   )
@@ -104,6 +105,7 @@ function Navbar() {
 
   return (
     <nav
+      data-gsap="navbar"
       style={{
         position: 'fixed',
         top: 0,
@@ -118,7 +120,7 @@ function Navbar() {
     >
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72 }}>
         {/* Logo */}
-        <a href="#inicio" style={{ textDecoration: 'none' }}>
+        <a href="#inicio" style={{ textDecoration: 'none' }} data-gsap="nav-logo">
           <div style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', color: '#FAF7F2', lineHeight: 1.1, letterSpacing: '0.08em' }}>
             <div style={{ fontSize: 13, fontWeight: 400, opacity: 0.7, letterSpacing: '0.25em', textTransform: 'uppercase' }}>Jennifer</div>
             <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Wohl</div>
@@ -131,6 +133,7 @@ function Navbar() {
             <a
               key={l.href}
               href={l.href}
+              data-gsap="nav-item"
               style={{
                 fontFamily: 'Manrope, sans-serif',
                 fontSize: 12,
@@ -153,6 +156,7 @@ function Navbar() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <a
             href="#contacto"
+            data-gsap="nav-item"
             style={{
               fontFamily: 'Manrope, sans-serif',
               fontSize: 11,
@@ -182,6 +186,7 @@ function Navbar() {
           </a>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
+            data-gsap="nav-item"
             style={{ background: 'none', border: 'none', color: '#F5F0E9', cursor: 'pointer', padding: 4 }}
             className="md:hidden"
           >
@@ -255,11 +260,11 @@ function HeroSection() {
       }}
     >
       {/* Decorative sparkles */}
-      <Sparkle size={10} className="sparkle" style={{ position: 'absolute', top: 120, left: 80, color: '#C3A36A', opacity: 0.7 } as any} />
-      <Sparkle size={7} className="sparkle-delay" style={{ position: 'absolute', top: 200, left: 200, color: '#C3A36A', opacity: 0.5 } as any} />
-      <Sparkle size={14} className="sparkle" style={{ position: 'absolute', top: 160, right: 120, color: '#D7AAA8', opacity: 0.6 } as any} />
-      <Sparkle size={8} className="sparkle-delay" style={{ position: 'absolute', bottom: 200, left: 60, color: '#C3A36A', opacity: 0.4 } as any} />
-      <Sparkle size={6} className="sparkle" style={{ position: 'absolute', top: 300, right: 340, color: '#C3A36A', opacity: 0.5 } as any} />
+      <Sparkle size={10} className="sparkle" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 120, left: 80, color: '#C3A36A', opacity: 0.7 }} />
+      <Sparkle size={7} className="sparkle-delay" data-gsap="sparkle" style={{ position: 'absolute', top: 200, left: 200, color: '#C3A36A', opacity: 0.5 }} />
+      <Sparkle size={14} className="sparkle" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 160, right: 120, color: '#D7AAA8', opacity: 0.6 }} />
+      <Sparkle size={8} className="sparkle-delay" data-gsap="sparkle" style={{ position: 'absolute', bottom: 200, left: 60, color: '#C3A36A', opacity: 0.4 }} />
+      <Sparkle size={6} className="sparkle" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 300, right: 340, color: '#C3A36A', opacity: 0.5 }} />
 
       {/* Subtle radial glow */}
       <div style={{
@@ -277,7 +282,7 @@ function HeroSection() {
             letterSpacing: '0.22em', textTransform: 'uppercase',
             color: '#C3A36A', marginBottom: 24,
             border: '1px solid rgba(195,163,106,0.35)', padding: '6px 14px',
-          }}>
+          }} data-gsap="hero-eyebrow">
             <Sparkle size={8} />
             Creadora de contenido UGC
           </div>
@@ -291,9 +296,15 @@ function HeroSection() {
             marginBottom: 28,
             letterSpacing: '-0.01em',
           }}>
-            Contenido<br />
-            auténtico que<br />
-            <span style={{ color: '#D7AAA8', fontStyle: 'italic' }}>conecta y convierte</span>
+            <span style={{ display: 'block', overflow: 'hidden' }}>
+              <span data-gsap="hero-title-line" style={{ display: 'block' }}>Contenido</span>
+            </span>
+            <span style={{ display: 'block', overflow: 'hidden' }}>
+              <span data-gsap="hero-title-line" style={{ display: 'block' }}>auténtico que</span>
+            </span>
+            <span style={{ display: 'block', overflow: 'hidden' }}>
+              <span data-gsap="hero-title-line" style={{ display: 'block', color: '#D7AAA8', fontStyle: 'italic' }}>conecta y convierte</span>
+            </span>
           </h1>
 
           <p style={{
@@ -304,13 +315,14 @@ function HeroSection() {
             color: 'rgba(245,240,233,0.72)',
             marginBottom: 40,
             maxWidth: 440,
-          }}>
+          }} data-gsap="hero-description">
             Creo videos orgánicos, visualmente cuidados y pensados para que las marcas muestren sus productos de una forma cercana, confiable y natural.
           </p>
 
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 40 }}>
             <a
               href="#portfolio"
+              data-gsap="hero-action"
               style={{
                 fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
                 letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -325,6 +337,7 @@ function HeroSection() {
             </a>
             <a
               href="#contacto"
+              data-gsap="hero-action"
               style={{
                 fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
                 letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -340,7 +353,7 @@ function HeroSection() {
             </a>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(245,240,233,0.5)', marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(245,240,233,0.5)', marginBottom: 40 }} data-gsap="hero-meta">
             <IconMapPin />
             <span style={{ fontFamily: 'Manrope, sans-serif', fontSize: 12, letterSpacing: '0.05em' }}>Benavídez, Buenos Aires, Argentina</span>
           </div>
@@ -350,7 +363,7 @@ function HeroSection() {
             fontFamily: 'Manrope, sans-serif', fontSize: 10, fontWeight: 700,
             letterSpacing: '0.18em', textTransform: 'uppercase',
             color: 'rgba(245,240,233,0.45)',
-          }}>
+          }} data-gsap="hero-meta">
             {['Beauty', 'Skincare', 'Lifestyle', 'Reviews'].map((cat, i) => (
               <span key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 {i > 0 && <span style={{ margin: '0 12px', opacity: 0.4 }}>·</span>}
@@ -370,7 +383,7 @@ function HeroSection() {
             position: 'relative', zIndex: 3,
             boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
             backgroundColor: '#c8a882',
-          }}>
+          }} data-gsap="hero-image">
             <img
               src="https://images.unsplash.com/photo-1670201203116-26644750a726?w=560&h=800&fit=crop&auto=format&q=85"
               alt="Jennifer Wohl, creadora de contenido UGC de beauty y skincare"
@@ -395,7 +408,7 @@ function HeroSection() {
             border: '2px solid rgba(215,170,168,0.5)',
             backgroundColor: '#d4b896', zIndex: 4,
             boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-          }}>
+          }} data-gsap="hero-card">
             <img
               src="https://images.unsplash.com/photo-1585945037805-5fd82c2e60b1?w=220&h=260&fit=crop&auto=format&q=80"
               alt="Textura de crema skincare"
@@ -412,7 +425,7 @@ function HeroSection() {
             border: '2px solid rgba(195,163,106,0.4)',
             backgroundColor: '#c8b89a', zIndex: 4,
             boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-          }}>
+          }} data-gsap="hero-card">
             <img
               src="https://images.unsplash.com/photo-1608068811588-3a67006b7489?w=190&h=230&fit=crop&auto=format&q=80"
               alt="Envase de producto de skincare"
@@ -429,8 +442,8 @@ function HeroSection() {
           }} />
 
           {/* Gold sparkles near photo */}
-          <Sparkle size={10} className="sparkle" style={{ position: 'absolute', top: 80, left: 55, color: '#C3A36A', zIndex: 5 } as any} />
-          <Sparkle size={7} className="sparkle-delay" style={{ position: 'absolute', bottom: 90, right: 40, color: '#D7AAA8', zIndex: 5 } as any} />
+          <Sparkle size={10} className="sparkle" data-gsap="sparkle" style={{ position: 'absolute', top: 80, left: 55, color: '#C3A36A', zIndex: 5 }} />
+          <Sparkle size={7} className="sparkle-delay" data-gsap="sparkle" style={{ position: 'absolute', bottom: 90, right: 40, color: '#D7AAA8', zIndex: 5 }} />
         </div>
       </div>
 
@@ -1449,8 +1462,11 @@ function WhatsAppButton() {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const introRef = useRef<HTMLDivElement | null>(null)
+  useHeroIntroAnimation(introRef)
+
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div ref={introRef} style={{ minHeight: '100vh' }}>
       <Navbar />
       <main>
         <HeroSection />

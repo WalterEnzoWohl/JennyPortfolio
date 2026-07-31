@@ -69,6 +69,23 @@ body {
   animation: shimmer 2.5s ease-in-out 1.2s infinite;
 }
 
+[data-gsap="sparkle"] {
+  animation: none;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .sparkle,
+  .sparkle-delay {
+    animation: none;
+  }
+}
+
 .oval-frame {
   border-radius: 50% / 45%;
 }
