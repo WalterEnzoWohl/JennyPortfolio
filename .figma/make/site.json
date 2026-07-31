@@ -1,0 +1,10 @@
+{
+  "description": "Create stunning web portfolio fronts effortlessly by utilizing images and prompts, perfect for designers and creatives looking to showcase their work.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
