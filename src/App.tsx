@@ -7,8 +7,6 @@ type ScrollFrameSequence = {
   framePath: (index: number) => string
 }
 
-const SCROLL_FRAME_EASE_POWER = 2.1
-
 const scrollFrameSequences = {
   landscape: {
     id: 'landscape',
@@ -33,10 +31,7 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     const container = containerRef.current
     if (!container) return
 
-    const getAnimatedSections = () =>
-      ['#inicio', '#sobre-mi', '#marcas', '#formatos']
-        .map((selector) => container.querySelector<HTMLElement>(selector))
-        .filter((section): section is HTMLElement => Boolean(section))
+    const getAnimatedSequence = () => container.querySelector<HTMLElement>('#intro-sequence')
 
     let current = 0
     let target = 0
@@ -113,16 +108,14 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     }
 
     const updateTarget = () => {
-      const animatedSections = getAnimatedSections()
+      const animatedSequence = getAnimatedSequence()
 
-      if (animatedSections.length > 0) {
-        const start = animatedSections[0].offsetTop
-        const lastSection = animatedSections[animatedSections.length - 1]
-        const end = lastSection.offsetTop + lastSection.offsetHeight
+      if (animatedSequence) {
+        const start = animatedSequence.offsetTop
+        const end = start + animatedSequence.offsetHeight
         const range = Math.max(end - start, 1)
-        const linearProgress = Math.min(1, Math.max(0, (window.scrollY - start) / range))
 
-        target = Math.pow(linearProgress, SCROLL_FRAME_EASE_POWER)
+        target = Math.min(1, Math.max(0, (window.scrollY - start) / range))
       } else {
         const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1)
         target = window.scrollY / maxScroll
@@ -1614,10 +1607,12 @@ export default function App() {
     <div ref={introRef} className="animated-background-page" style={{ minHeight: '100vh' }}>
       <Navbar />
       <main>
-        <HeroSection />
-        <AboutSection />
-        <BrandsSection />
-        <ContentFormatsSection />
+        <div id="intro-sequence">
+          <HeroSection />
+          <AboutSection />
+          <BrandsSection />
+          <ContentFormatsSection />
+        </div>
         <VideoPortfolioSection />
         <ServicesSection />
         <TestimonialsSection />
