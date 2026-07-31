@@ -113,7 +113,7 @@ svg {
 }
 
 .animated-background-page {
-  --scroll-frame: url("/video-jenny/ezgif-frame-001.jpg");
+  --scroll-frame: url("/video-jenny/landscape-frame-001.jpg");
   position: relative;
   isolation: isolate;
   min-height: 100vh;
@@ -127,8 +127,8 @@ svg {
   z-index: -2;
   pointer-events: none;
   background-image: var(--scroll-frame);
-  background-size: auto 100%;
-  background-position: right center;
+  background-size: cover;
+  background-position: center center;
   background-repeat: no-repeat;
   background-color: #21070D;
   transform: translateZ(0);
@@ -276,7 +276,6 @@ svg {
 
 @media (max-width: 640px) {
   .animated-background-page::before {
-    background-size: cover;
     background-position: center top;
   }
 

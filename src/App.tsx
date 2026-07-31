@@ -1,8 +1,30 @@
 import { useState, useEffect, useRef, type RefObject, type SVGProps } from 'react'
 import { useHeroIntroAnimation } from './hooks/useHeroIntroAnimation'
 
-const FRAME_COUNT = 240
-const framePath = (index: number) => `/video-jenny/ezgif-frame-${String(index).padStart(3, '0')}.jpg`
+type ScrollFrameSequence = {
+  id: 'landscape' | 'portrait'
+  frameCount: number
+  framePath: (index: number) => string
+}
+
+const scrollFrameSequences = {
+  landscape: {
+    id: 'landscape',
+    frameCount: 150,
+    framePath: (index: number) => `/video-jenny/landscape-frame-${String(index).padStart(3, '0')}.jpg`,
+  },
+  portrait: {
+    id: 'portrait',
+    frameCount: 240,
+    framePath: (index: number) => `/video-jenny/ezgif-frame-${String(index).padStart(3, '0')}.jpg`,
+  },
+} satisfies Record<string, ScrollFrameSequence>
+
+function getScrollFrameSequence(): ScrollFrameSequence {
+  const shouldUsePortraitFrames = window.matchMedia('(orientation: portrait), (max-width: 640px)').matches
+
+  return shouldUsePortraitFrames ? scrollFrameSequences.portrait : scrollFrameSequences.landscape
+}
 
 function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>) {
   useEffect(() => {
@@ -12,15 +34,36 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     let current = 0
     let target = 0
     let animationFrame = 0
-    let activeFrame = 1
+    let activeFrame = 0
+    let sequence = getScrollFrameSequence()
+    let preloadedFrames: HTMLImageElement[] = []
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     const setFrame = (progress: number) => {
-      const nextFrame = Math.min(FRAME_COUNT, Math.max(1, Math.round(progress * (FRAME_COUNT - 1)) + 1))
+      const nextFrame = Math.min(sequence.frameCount, Math.max(1, Math.round(progress * (sequence.frameCount - 1)) + 1))
 
       if (nextFrame !== activeFrame) {
         activeFrame = nextFrame
-        container.style.setProperty('--scroll-frame', `url("${framePath(activeFrame)}")`)
+        container.style.setProperty('--scroll-frame', `url("${sequence.framePath(activeFrame)}")`)
+      }
+    }
+
+    const preloadFrames = () => {
+      preloadedFrames = Array.from({ length: sequence.frameCount }, (_, index) => {
+        const image = new Image()
+        image.src = sequence.framePath(index + 1)
+        return image
+      })
+    }
+
+    const updateSequence = () => {
+      const nextSequence = getScrollFrameSequence()
+
+      if (nextSequence.id !== sequence.id) {
+        sequence = nextSequence
+        activeFrame = 0
+        preloadFrames()
+        setFrame(current)
       }
     }
 
@@ -40,26 +83,26 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
       animationFrame = window.requestAnimationFrame(tick)
     }
 
-    const preloadedFrames = Array.from({ length: FRAME_COUNT }, (_, index) => {
-      const image = new Image()
-      image.src = framePath(index + 1)
-      return image
-    })
-
-    container.style.setProperty('--scroll-frame', `url("${framePath(1)}")`)
+    preloadFrames()
+    setFrame(0)
     updateTarget()
 
     if (!reduceMotion) {
       animationFrame = window.requestAnimationFrame(tick)
     }
 
+    const handleResize = () => {
+      updateSequence()
+      updateTarget()
+    }
+
     window.addEventListener('scroll', updateTarget, { passive: true })
-    window.addEventListener('resize', updateTarget)
+    window.addEventListener('resize', handleResize)
 
     return () => {
       preloadedFrames.length = 0
       window.removeEventListener('scroll', updateTarget)
-      window.removeEventListener('resize', updateTarget)
+      window.removeEventListener('resize', handleResize)
       window.cancelAnimationFrame(animationFrame)
     }
   }, [containerRef])
