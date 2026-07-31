@@ -1,5 +1,69 @@
-import { useState, useEffect, useRef, type SVGProps } from 'react'
+import { useState, useEffect, useRef, type RefObject, type SVGProps } from 'react'
 import { useHeroIntroAnimation } from './hooks/useHeroIntroAnimation'
+
+const FRAME_COUNT = 240
+const framePath = (index: number) => `/video-jenny/ezgif-frame-${String(index).padStart(3, '0')}.jpg`
+
+function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+
+    let current = 0
+    let target = 0
+    let animationFrame = 0
+    let activeFrame = 1
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    const setFrame = (progress: number) => {
+      const nextFrame = Math.min(FRAME_COUNT, Math.max(1, Math.round(progress * (FRAME_COUNT - 1)) + 1))
+
+      if (nextFrame !== activeFrame) {
+        activeFrame = nextFrame
+        container.style.setProperty('--scroll-frame', `url("${framePath(activeFrame)}")`)
+      }
+    }
+
+    const updateTarget = () => {
+      const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1)
+      target = window.scrollY / maxScroll
+
+      if (reduceMotion) {
+        current = target
+        setFrame(current)
+      }
+    }
+
+    const tick = () => {
+      current += (target - current) * 0.08
+      setFrame(current)
+      animationFrame = window.requestAnimationFrame(tick)
+    }
+
+    const preloadedFrames = Array.from({ length: FRAME_COUNT }, (_, index) => {
+      const image = new Image()
+      image.src = framePath(index + 1)
+      return image
+    })
+
+    container.style.setProperty('--scroll-frame', `url("${framePath(1)}")`)
+    updateTarget()
+
+    if (!reduceMotion) {
+      animationFrame = window.requestAnimationFrame(tick)
+    }
+
+    window.addEventListener('scroll', updateTarget, { passive: true })
+    window.addEventListener('resize', updateTarget)
+
+    return () => {
+      preloadedFrames.length = 0
+      window.removeEventListener('scroll', updateTarget)
+      window.removeEventListener('resize', updateTarget)
+      window.cancelAnimationFrame(animationFrame)
+    }
+  }, [containerRef])
+}
 
 // ─── Decorative SVG Icons ─────────────────────────────────────────────────────
 
@@ -1472,9 +1536,10 @@ function WhatsAppButton() {
 export default function App() {
   const introRef = useRef<HTMLDivElement | null>(null)
   useHeroIntroAnimation(introRef)
+  useScrollFrameBackground(introRef)
 
   return (
-    <div ref={introRef} style={{ minHeight: '100vh' }}>
+    <div ref={introRef} className="animated-background-page" style={{ minHeight: '100vh' }}>
       <Navbar />
       <main>
         <HeroSection />

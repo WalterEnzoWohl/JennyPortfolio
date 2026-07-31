@@ -112,6 +112,58 @@ svg {
   border: 2px solid rgba(255,255,255,0.15);
 }
 
+.animated-background-page {
+  --scroll-frame: url("/video-jenny/ezgif-frame-001.jpg");
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  background: #21070D;
+}
+
+.animated-background-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background-image: var(--scroll-frame);
+  background-size: auto 100%;
+  background-position: right center;
+  background-repeat: no-repeat;
+  background-color: #21070D;
+  transform: translateZ(0);
+  will-change: background-image;
+}
+
+.animated-background-page::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(33, 7, 13, 0.9) 0%, rgba(33, 7, 13, 0.68) 45%, rgba(33, 7, 13, 0.34) 100%),
+    rgba(33, 7, 13, 0.16);
+}
+
+.animated-background-page #inicio,
+.animated-background-page #portfolio,
+.animated-background-page #contacto {
+  background: transparent !important;
+}
+
+.animated-background-page .hero-photo-stage,
+.animated-background-page #inicio .hero-sparkle,
+.animated-background-page #inicio .hero-photo-sparkle,
+.animated-background-page #inicio .hero-line-decoration,
+.animated-background-page #inicio .hero-oval-border {
+  display: none !important;
+}
+
+.animated-background-page #inicio .hero-grid {
+  grid-template-columns: minmax(0, 560px) 1fr !important;
+}
+
 .nav-links {
   display: flex !important;
 }
@@ -175,6 +227,14 @@ svg {
 }
 
 @media (max-width: 900px) {
+  .animated-background-page::after {
+    background: linear-gradient(180deg, rgba(33, 7, 13, 0.88) 0%, rgba(33, 7, 13, 0.64) 55%, rgba(33, 7, 13, 0.38) 100%);
+  }
+
+  .animated-background-page #inicio .hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+
   section {
     padding-left: 22px !important;
     padding-right: 22px !important;
@@ -215,6 +275,11 @@ svg {
 }
 
 @media (max-width: 640px) {
+  .animated-background-page::before {
+    background-size: cover;
+    background-position: center top;
+  }
+
   section {
     padding-top: 72px !important;
     padding-bottom: 72px !important;
@@ -425,5 +490,11 @@ svg {
   .video-card,
   .phone-frame {
     width: min(100%, 150px) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animated-background-page::before {
+    will-change: auto;
   }
 }
