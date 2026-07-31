@@ -11,7 +11,7 @@ const scrollFrameSequences = {
   landscape: {
     id: 'landscape',
     frameCount: 150,
-    framePath: (index: number) => `/video-jenny/landscape-frame-${String(index).padStart(3, '0')}.jpg`,
+    framePath: (index: number) => `/video-jenny/${String(index).padStart(3, '0')}.png`,
   },
   portrait: {
     id: 'portrait',
@@ -21,7 +21,7 @@ const scrollFrameSequences = {
 } satisfies Record<string, ScrollFrameSequence>
 
 function getScrollFrameSequence(): ScrollFrameSequence {
-  const shouldUsePortraitFrames = window.matchMedia('(orientation: portrait), (max-width: 640px)').matches
+  const shouldUsePortraitFrames = window.innerWidth <= 640 || window.innerHeight > window.innerWidth
 
   return shouldUsePortraitFrames ? scrollFrameSequences.portrait : scrollFrameSequences.landscape
 }
@@ -36,7 +36,8 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     let animationFrame = 0
     let activeFrame = 0
     let sequence = getScrollFrameSequence()
-    let preloadedFrames: HTMLImageElement[] = []
+    let preloadedFrames: Array<{ src: string; image: HTMLImageElement }> = []
+    let preloadedFrameSrcs = new Set<string>()
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
     const setFrame = (progress: number) => {
@@ -45,14 +46,50 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
       if (nextFrame !== activeFrame) {
         activeFrame = nextFrame
         container.style.setProperty('--scroll-frame', `url("${sequence.framePath(activeFrame)}")`)
+        preloadFrames(activeFrame)
       }
     }
 
-    const preloadFrames = () => {
-      preloadedFrames = Array.from({ length: sequence.frameCount }, (_, index) => {
+    const preloadFrame = (index: number) => {
+      if (index < 1 || index > sequence.frameCount) return
+
+      const src = sequence.framePath(index)
+      if (preloadedFrameSrcs.has(src)) return
+
+      const image = new Image()
+      image.src = src
+      preloadedFrames.push({ src, image })
+      preloadedFrameSrcs.add(src)
+
+      if (preloadedFrames.length > 36) {
+        const removed = preloadedFrames.shift()
+        if (removed) preloadedFrameSrcs.delete(removed.src)
+      }
+    }
+
+    const preloadFrames = (centerFrame: number) => {
+      const radius = sequence.id === 'landscape' ? 8 : 12
+
+      preloadFrame(1)
+
+      for (let offset = 0; offset <= radius; offset += 1) {
+        preloadFrame(centerFrame - offset)
+        preloadFrame(centerFrame + offset)
+      }
+    }
+
+    const resetPreloadedFrames = () => {
+      preloadedFrames = []
+      preloadedFrameSrcs = new Set<string>()
+    }
+
+    const preloadInitialFrames = () => {
+      preloadedFrames = Array.from({ length: Math.min(sequence.frameCount, 12) }, (_, index) => {
+        const src = sequence.framePath(index + 1)
+        preloadedFrameSrcs.add(src)
         const image = new Image()
-        image.src = sequence.framePath(index + 1)
-        return image
+        image.src = src
+        return { src, image }
       })
     }
 
@@ -62,7 +99,8 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
       if (nextSequence.id !== sequence.id) {
         sequence = nextSequence
         activeFrame = 0
-        preloadFrames()
+        resetPreloadedFrames()
+        preloadInitialFrames()
         setFrame(current)
       }
     }
@@ -83,7 +121,7 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
       animationFrame = window.requestAnimationFrame(tick)
     }
 
-    preloadFrames()
+    preloadInitialFrames()
     setFrame(0)
     updateTarget()
 
@@ -100,7 +138,7 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     window.addEventListener('resize', handleResize)
 
     return () => {
-      preloadedFrames.length = 0
+      resetPreloadedFrames()
       window.removeEventListener('scroll', updateTarget)
       window.removeEventListener('resize', handleResize)
       window.cancelAnimationFrame(animationFrame)
