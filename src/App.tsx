@@ -34,7 +34,7 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     if (!container) return
 
     const getAnimatedSections = () =>
-      ['#inicio', '#sobre-mi', '#marcas']
+      ['#inicio', '#sobre-mi', '#marcas', '#formatos']
         .map((selector) => container.querySelector<HTMLElement>(selector))
         .filter((section): section is HTMLElement => Boolean(section))
 
@@ -713,7 +713,7 @@ function AboutSection() {
 
       <div style={{
         maxWidth: 1280, margin: '0 auto',
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center',
+        display: 'grid', gridTemplateColumns: 'minmax(0, 760px)', gap: 80, alignItems: 'center',
       }} className="about-grid">
         {/* Left */}
         <div>
@@ -770,34 +770,6 @@ function AboutSection() {
           </div>
         </div>
 
-        {/* Right — oval photo */}
-        <div className="about-photo-stage" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', minHeight: 420 }}>
-          {/* Outer decorative oval border */}
-          <div className="about-oval-border" style={{
-            position: 'absolute',
-            width: 300, height: 380,
-            borderRadius: '50%',
-            border: '1px solid rgba(77,7,21,0.3)',
-            transform: 'translate(14px, 14px)',
-          }} />
-          {/* Photo container */}
-          <div className="about-photo" style={{
-            width: 280, height: 360,
-            borderRadius: '50%',
-            overflow: 'hidden',
-            backgroundColor: '#c8b299',
-            boxShadow: '0 24px 60px rgba(77,7,21,0.2)',
-            position: 'relative', zIndex: 2,
-          }}>
-            <img
-              src="https://images.unsplash.com/photo-1728727267814-792db55ce678?w=560&h=720&fit=crop&auto=format&q=85"
-              alt="Jennifer Wohl, creadora de contenido UGC"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </div>
-          <Sparkle size={12} className="sparkle" style={{ position: 'absolute', top: 30, right: 30, color: '#C3A36A' } as any} />
-          <Sparkle size={8} className="sparkle-delay" style={{ position: 'absolute', bottom: 40, left: 20, color: '#D7AAA8' } as any} />
-        </div>
       </div>
 
       <style>{`
@@ -849,7 +821,7 @@ const formats = [
 
 function ContentFormatsSection() {
   return (
-    <section style={{ backgroundColor: '#F5F0E9', padding: '96px 24px' }}>
+    <section id="formatos" style={{ backgroundColor: '#F5F0E9', padding: '96px 24px' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 64 }}>
           <div style={{
@@ -885,7 +857,7 @@ function ContentFormatsSection() {
                 transition: 'background-color 0.25s',
                 cursor: 'default',
               }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(77,7,21,0.04)')}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(245,240,233,0.06)')}
               onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.backgroundColor = 'transparent')}
             >
               <div style={{

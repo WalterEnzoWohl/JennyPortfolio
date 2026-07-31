@@ -149,7 +149,8 @@ svg {
 
 .animated-background-page #inicio,
 .animated-background-page #sobre-mi,
-.animated-background-page #marcas {
+.animated-background-page #marcas,
+.animated-background-page #formatos {
   background: transparent !important;
   position: relative;
 }
@@ -169,22 +170,27 @@ svg {
 }
 
 .animated-background-page #sobre-mi,
-.animated-background-page #marcas {
+.animated-background-page #marcas,
+.animated-background-page #formatos {
   color: #FAF7F2;
 }
 
 .animated-background-page #sobre-mi h2,
-.animated-background-page #marcas h2 {
+.animated-background-page #marcas h2,
+.animated-background-page #formatos h2,
+.animated-background-page #formatos h3 {
   color: #FAF7F2 !important;
 }
 
 .animated-background-page #sobre-mi em,
-.animated-background-page #marcas em {
+.animated-background-page #marcas em,
+.animated-background-page #formatos em {
   color: #D7AAA8 !important;
 }
 
 .animated-background-page #sobre-mi p,
-.animated-background-page #marcas p {
+.animated-background-page #marcas p,
+.animated-background-page #formatos p {
   color: rgba(245, 240, 233, 0.78) !important;
 }
 
@@ -201,14 +207,31 @@ svg {
   background-color: rgba(245, 240, 233, 0.22) !important;
 }
 
-.animated-background-page #sobre-mi .about-attributes div div,
-.animated-background-page #sobre-mi .about-oval-border {
+.animated-background-page #sobre-mi .about-attributes div div {
   border-color: rgba(245, 240, 233, 0.28) !important;
 }
 
 .animated-background-page #sobre-mi .about-attributes div div,
 .animated-background-page #sobre-mi .about-attributes span {
   color: #FAF7F2 !important;
+}
+
+.animated-background-page #formatos .formats-grid {
+  border-top-color: rgba(245, 240, 233, 0.2) !important;
+}
+
+.animated-background-page #formatos .format-card {
+  border-right-color: rgba(245, 240, 233, 0.18) !important;
+  border-bottom-color: rgba(245, 240, 233, 0.18) !important;
+}
+
+.animated-background-page #formatos .format-card:hover {
+  background-color: rgba(245, 240, 233, 0.06) !important;
+}
+
+.animated-background-page #formatos .format-card > div {
+  border-color: rgba(245, 240, 233, 0.26) !important;
+  color: #D7AAA8 !important;
 }
 
 .nav-links {
@@ -306,10 +329,6 @@ svg {
     min-height: 450px !important;
     width: min(100%, 520px);
     margin: 0 auto;
-  }
-
-  .about-photo-stage {
-    min-height: 390px !important;
   }
 
   .contact-grid {
@@ -433,20 +452,6 @@ svg {
   .about-attributes {
     justify-content: space-between;
     gap: 14px !important;
-  }
-
-  .about-photo-stage {
-    min-height: 340px !important;
-  }
-
-  .about-photo {
-    width: min(74vw, 238px) !important;
-    height: min(94vw, 306px) !important;
-  }
-
-  .about-oval-border {
-    width: min(80vw, 256px) !important;
-    height: min(101vw, 326px) !important;
   }
 
   .formats-grid,
