@@ -121,16 +121,11 @@ svg {
   background: #21070D;
 }
 
-.animated-background-page #inicio {
-  background: transparent !important;
-  isolation: isolate;
-}
-
-.animated-background-page #inicio::before {
+.animated-background-page::before {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: var(--hero-nav-offset) 0 0;
-  z-index: 0;
+  z-index: -2;
   pointer-events: none;
   background-image: var(--scroll-frame);
   background-size: cover;
@@ -141,15 +136,22 @@ svg {
   will-change: background-image;
 }
 
-.animated-background-page #inicio::after {
+.animated-background-page::after {
   content: "";
-  position: absolute;
+  position: fixed;
   inset: var(--hero-nav-offset) 0 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
   background:
     linear-gradient(90deg, rgba(33, 7, 13, 0.9) 0%, rgba(33, 7, 13, 0.68) 45%, rgba(33, 7, 13, 0.34) 100%),
     rgba(33, 7, 13, 0.16);
+}
+
+.animated-background-page #inicio,
+.animated-background-page #sobre-mi,
+.animated-background-page #marcas {
+  background: transparent !important;
+  position: relative;
 }
 
 .animated-background-page .hero-photo-stage,
@@ -164,6 +166,49 @@ svg {
   position: relative;
   z-index: 1;
   grid-template-columns: minmax(0, 560px) 1fr !important;
+}
+
+.animated-background-page #sobre-mi,
+.animated-background-page #marcas {
+  color: #FAF7F2;
+}
+
+.animated-background-page #sobre-mi h2,
+.animated-background-page #marcas h2 {
+  color: #FAF7F2 !important;
+}
+
+.animated-background-page #sobre-mi em,
+.animated-background-page #marcas em {
+  color: #D7AAA8 !important;
+}
+
+.animated-background-page #sobre-mi p,
+.animated-background-page #marcas p {
+  color: rgba(245, 240, 233, 0.78) !important;
+}
+
+.animated-background-page #marcas .brands-row {
+  border-top-color: rgba(245, 240, 233, 0.2) !important;
+  border-bottom-color: rgba(245, 240, 233, 0.2) !important;
+}
+
+.animated-background-page #marcas .brands-row span {
+  color: #FAF7F2 !important;
+}
+
+.animated-background-page #marcas .brands-row > div > div {
+  background-color: rgba(245, 240, 233, 0.22) !important;
+}
+
+.animated-background-page #sobre-mi .about-attributes div div,
+.animated-background-page #sobre-mi .about-oval-border {
+  border-color: rgba(245, 240, 233, 0.28) !important;
+}
+
+.animated-background-page #sobre-mi .about-attributes div div,
+.animated-background-page #sobre-mi .about-attributes span {
+  color: #FAF7F2 !important;
 }
 
 .nav-links {
@@ -229,7 +274,7 @@ svg {
 }
 
 @media (max-width: 900px) {
-  .animated-background-page #inicio::after {
+  .animated-background-page::after {
     background: linear-gradient(180deg, rgba(33, 7, 13, 0.88) 0%, rgba(33, 7, 13, 0.64) 55%, rgba(33, 7, 13, 0.38) 100%);
   }
 
@@ -281,7 +326,7 @@ svg {
     --hero-nav-offset: 66px;
   }
 
-  .animated-background-page #inicio::before {
+  .animated-background-page::before {
     background-position: center top;
   }
 
@@ -499,7 +544,7 @@ svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animated-background-page #inicio::before {
+  .animated-background-page::before {
     will-change: auto;
   }
 }
