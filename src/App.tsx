@@ -30,6 +30,7 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
+    const hero = container.querySelector<HTMLElement>('#inicio')
 
     let current = 0
     let target = 0
@@ -106,8 +107,14 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     }
 
     const updateTarget = () => {
-      const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1)
-      target = window.scrollY / maxScroll
+      if (hero) {
+        const heroStart = hero.offsetTop
+        const heroRange = Math.max(hero.offsetHeight, 1)
+        target = Math.min(1, Math.max(0, (window.scrollY - heroStart) / heroRange))
+      } else {
+        const maxScroll = Math.max(document.documentElement.scrollHeight - window.innerHeight, 1)
+        target = window.scrollY / maxScroll
+      }
 
       if (reduceMotion) {
         current = target

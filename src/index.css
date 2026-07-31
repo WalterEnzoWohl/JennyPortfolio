@@ -114,42 +114,42 @@ svg {
 
 .animated-background-page {
   --scroll-frame: url("/video-jenny/001.png");
+  --hero-nav-offset: 72px;
   position: relative;
   isolation: isolate;
   min-height: 100vh;
   background: #21070D;
 }
 
-.animated-background-page::before {
+.animated-background-page #inicio {
+  background: transparent !important;
+  isolation: isolate;
+}
+
+.animated-background-page #inicio::before {
   content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
+  position: absolute;
+  inset: var(--hero-nav-offset) 0 0;
+  z-index: 0;
   pointer-events: none;
   background-image: var(--scroll-frame);
   background-size: cover;
-  background-position: center center;
+  background-position: center top;
   background-repeat: no-repeat;
   background-color: #21070D;
   transform: translateZ(0);
   will-change: background-image;
 }
 
-.animated-background-page::after {
+.animated-background-page #inicio::after {
   content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -1;
+  position: absolute;
+  inset: var(--hero-nav-offset) 0 0;
+  z-index: 0;
   pointer-events: none;
   background:
     linear-gradient(90deg, rgba(33, 7, 13, 0.9) 0%, rgba(33, 7, 13, 0.68) 45%, rgba(33, 7, 13, 0.34) 100%),
     rgba(33, 7, 13, 0.16);
-}
-
-.animated-background-page #inicio,
-.animated-background-page #portfolio,
-.animated-background-page #contacto {
-  background: transparent !important;
 }
 
 .animated-background-page .hero-photo-stage,
@@ -161,6 +161,8 @@ svg {
 }
 
 .animated-background-page #inicio .hero-grid {
+  position: relative;
+  z-index: 1;
   grid-template-columns: minmax(0, 560px) 1fr !important;
 }
 
@@ -227,7 +229,7 @@ svg {
 }
 
 @media (max-width: 900px) {
-  .animated-background-page::after {
+  .animated-background-page #inicio::after {
     background: linear-gradient(180deg, rgba(33, 7, 13, 0.88) 0%, rgba(33, 7, 13, 0.64) 55%, rgba(33, 7, 13, 0.38) 100%);
   }
 
@@ -275,7 +277,11 @@ svg {
 }
 
 @media (max-width: 640px) {
-  .animated-background-page::before {
+  .animated-background-page {
+    --hero-nav-offset: 66px;
+  }
+
+  .animated-background-page #inicio::before {
     background-position: center top;
   }
 
@@ -493,7 +499,7 @@ svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animated-background-page::before {
+  .animated-background-page #inicio::before {
     will-change: auto;
   }
 }
