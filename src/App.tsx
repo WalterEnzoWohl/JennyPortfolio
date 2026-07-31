@@ -10,13 +10,13 @@ type ScrollFrameSequence = {
 const scrollFrameSequences = {
   landscape: {
     id: 'landscape',
-    frameCount: 150,
+    frameCount: 167,
     framePath: (index: number) => `/video-jenny/${String(index).padStart(3, '0')}.png`,
   },
   portrait: {
     id: 'portrait',
-    frameCount: 240,
-    framePath: (index: number) => `/video-jenny/ezgif-frame-${String(index).padStart(3, '0')}.jpg`,
+    frameCount: 167,
+    framePath: (index: number) => `/video-jenny/${String(index).padStart(3, '0')}.png`,
   },
 } satisfies Record<string, ScrollFrameSequence>
 
@@ -32,6 +32,7 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
     if (!container) return
 
     const getAnimatedSequence = () => container.querySelector<HTMLElement>('#intro-sequence')
+    const getAnimatedEnd = () => container.querySelector<HTMLElement>('#marcas') ?? getAnimatedSequence()
 
     let current = 0
     let target = 0
@@ -111,8 +112,9 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
       const animatedSequence = getAnimatedSequence()
 
       if (animatedSequence) {
+        const animatedEnd = getAnimatedEnd()
         const start = animatedSequence.offsetTop
-        const end = start + animatedSequence.offsetHeight
+        const end = animatedEnd ? animatedEnd.offsetTop + animatedEnd.offsetHeight : start + animatedSequence.offsetHeight
         const range = Math.max(end - start, 1)
 
         target = Math.min(1, Math.max(0, (window.scrollY - start) / range))
