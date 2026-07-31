@@ -170,7 +170,7 @@ function Navbar() {
               transition: 'all 0.2s',
               whiteSpace: 'nowrap',
             }}
-            className="hidden sm:inline-block"
+            className="hidden sm:inline-block nav-desktop-cta"
             onMouseEnter={(e) => {
               const el = e.target as HTMLElement
               el.style.borderColor = '#C3A36A'
@@ -188,7 +188,9 @@ function Navbar() {
             onClick={() => setMenuOpen(!menuOpen)}
             data-gsap="nav-item"
             style={{ background: 'none', border: 'none', color: '#F5F0E9', cursor: 'pointer', padding: 4 }}
-            className="md:hidden"
+            className="md:hidden nav-menu-toggle"
+            aria-label={menuOpen ? 'Cerrar menu' : 'Abrir menu'}
+            aria-expanded={menuOpen}
           >
             {menuOpen ? <IconClose /> : <IconMenu />}
           </button>
@@ -197,7 +199,7 @@ function Navbar() {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div style={{ backgroundColor: '#21070D', borderTop: '1px solid rgba(195,163,106,0.15)', padding: '20px 24px 24px' }} className="md:hidden">
+        <div style={{ backgroundColor: '#21070D', borderTop: '1px solid rgba(195,163,106,0.15)', padding: '20px 24px 24px' }} className="md:hidden mobile-menu-panel">
           {links.map((l) => (
             <a
               key={l.href}
@@ -1330,7 +1332,7 @@ function ContactSection() {
         {/* Right — contact info */}
         <div>
           {[
-            { icon: <IconWhatsApp />, label: 'WhatsApp', value: '+54 11 0000-0000', href: 'https://wa.me/5401100000000' },
+            { icon: <IconWhatsApp />, label: 'WhatsApp', value: '+54 9 11 5583-8867', href: 'https://wa.me/5491155838867' },
             { icon: <IconEmail />, label: 'Email', value: 'jenniferaldana48@gmail.com', href: 'mailto:jenniferaldana48@gmail.com' },
             { icon: <IconInstagram />, label: 'Instagram', value: '@jennii.wohl', href: 'https://instagram.com/jennii.wohl' },
             { icon: <IconTikTok />, label: 'TikTok', value: '@jenniii.wohl', href: 'https://tiktok.com/@jenniii.wohl' },
@@ -1446,7 +1448,7 @@ function WhatsAppButton() {
   return (
     <a
       className="whatsapp-float"
-      href="https://wa.me/5401100000000"
+      href="https://wa.me/5491155838867"
       aria-label="Contactar por WhatsApp"
       style={{
         position: 'fixed', bottom: 28, right: 28, zIndex: 150,

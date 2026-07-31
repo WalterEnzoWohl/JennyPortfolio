@@ -112,6 +112,38 @@ svg {
   border: 2px solid rgba(255,255,255,0.15);
 }
 
+.nav-links {
+  display: flex !important;
+}
+
+.nav-menu-toggle {
+  display: none !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-menu-panel {
+  display: none !important;
+}
+
+@media (max-width: 767px) {
+  .nav-links,
+  .nav-desktop-cta {
+    display: none !important;
+  }
+
+  .nav-menu-toggle {
+    display: flex !important;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+  }
+
+  .mobile-menu-panel {
+    display: block !important;
+  }
+}
+
 @media (max-width: 1180px) {
   .nav-links {
     gap: 22px !important;
