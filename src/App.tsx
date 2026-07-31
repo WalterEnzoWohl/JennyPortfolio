@@ -118,7 +118,7 @@ function Navbar() {
         transition: 'background-color 0.4s ease, backdrop-filter 0.4s ease',
       }}
     >
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72 }}>
+      <div className="nav-inner" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72 }}>
         {/* Logo */}
         <a href="#inicio" style={{ textDecoration: 'none' }} data-gsap="nav-logo">
           <div style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', color: '#FAF7F2', lineHeight: 1.1, letterSpacing: '0.08em' }}>
@@ -128,7 +128,7 @@ function Navbar() {
         </a>
 
         {/* Desktop links */}
-        <div style={{ display: 'flex', gap: 36, alignItems: 'center' }} className="hidden md:flex">
+        <div style={{ display: 'flex', gap: 36, alignItems: 'center' }} className="hidden md:flex nav-links">
           {links.map((l) => (
             <a
               key={l.href}
@@ -260,11 +260,11 @@ function HeroSection() {
       }}
     >
       {/* Decorative sparkles */}
-      <Sparkle size={10} className="sparkle" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 120, left: 80, color: '#C3A36A', opacity: 0.7 }} />
-      <Sparkle size={7} className="sparkle-delay" data-gsap="sparkle" style={{ position: 'absolute', top: 200, left: 200, color: '#C3A36A', opacity: 0.5 }} />
-      <Sparkle size={14} className="sparkle" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 160, right: 120, color: '#D7AAA8', opacity: 0.6 }} />
-      <Sparkle size={8} className="sparkle-delay" data-gsap="sparkle" style={{ position: 'absolute', bottom: 200, left: 60, color: '#C3A36A', opacity: 0.4 }} />
-      <Sparkle size={6} className="sparkle" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 300, right: 340, color: '#C3A36A', opacity: 0.5 }} />
+      <Sparkle size={10} className="sparkle hero-sparkle hero-sparkle-one" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 120, left: 80, color: '#C3A36A', opacity: 0.7 }} />
+      <Sparkle size={7} className="sparkle-delay hero-sparkle hero-sparkle-two" data-gsap="sparkle" style={{ position: 'absolute', top: 200, left: 200, color: '#C3A36A', opacity: 0.5 }} />
+      <Sparkle size={14} className="sparkle hero-sparkle hero-sparkle-three" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 160, right: 120, color: '#D7AAA8', opacity: 0.6 }} />
+      <Sparkle size={8} className="sparkle-delay hero-sparkle hero-sparkle-four" data-gsap="sparkle" style={{ position: 'absolute', bottom: 200, left: 60, color: '#C3A36A', opacity: 0.4 }} />
+      <Sparkle size={6} className="sparkle hero-sparkle hero-sparkle-five" data-gsap="sparkle" data-gsap-float="true" style={{ position: 'absolute', top: 300, right: 340, color: '#C3A36A', opacity: 0.5 }} />
 
       {/* Subtle radial glow */}
       <div style={{
@@ -275,7 +275,7 @@ function HeroSection() {
 
       <div style={{ maxWidth: 1280, margin: '0 auto', padding: '60px 24px 80px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60, alignItems: 'center' }} className="hero-grid">
         {/* Left column */}
-        <div style={{ position: 'relative', zIndex: 2 }}>
+        <div className="hero-copy" style={{ position: 'relative', zIndex: 2 }}>
           <div style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             fontFamily: 'Manrope, sans-serif', fontSize: 10, fontWeight: 700,
@@ -319,7 +319,7 @@ function HeroSection() {
             Creo videos orgánicos, visualmente cuidados y pensados para que las marcas muestren sus productos de una forma cercana, confiable y natural.
           </p>
 
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 40 }}>
+          <div className="hero-actions" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 40 }}>
             <a
               href="#portfolio"
               data-gsap="hero-action"
@@ -358,7 +358,7 @@ function HeroSection() {
             <span style={{ fontFamily: 'Manrope, sans-serif', fontSize: 12, letterSpacing: '0.05em' }}>Benavídez, Buenos Aires, Argentina</span>
           </div>
 
-          <div style={{
+          <div className="hero-categories" style={{
             display: 'flex', gap: 0, alignItems: 'center',
             fontFamily: 'Manrope, sans-serif', fontSize: 10, fontWeight: 700,
             letterSpacing: '0.18em', textTransform: 'uppercase',
@@ -374,9 +374,9 @@ function HeroSection() {
         </div>
 
         {/* Right column — photos */}
-        <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 520 }}>
+        <div className="hero-photo-stage" style={{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 520 }}>
           {/* Main photo */}
-          <div style={{
+          <div className="hero-main-photo" style={{
             width: 280, height: 400,
             borderRadius: '50% 50% 50% 50% / 40% 40% 60% 60%',
             overflow: 'hidden',
@@ -392,7 +392,7 @@ function HeroSection() {
           </div>
 
           {/* Oval border decoration */}
-          <div style={{
+          <div className="hero-oval-border" style={{
             position: 'absolute', width: 310, height: 430, zIndex: 2,
             borderRadius: '50% 50% 50% 50% / 40% 40% 60% 60%',
             border: '1px solid rgba(195,163,106,0.4)',
@@ -400,7 +400,7 @@ function HeroSection() {
           }} />
 
           {/* Top-right oval: product */}
-          <div style={{
+          <div className="hero-side-card hero-card-top" style={{
             position: 'absolute', top: 20, right: 20,
             width: 110, height: 130,
             borderRadius: '50%',
@@ -417,7 +417,7 @@ function HeroSection() {
           </div>
 
           {/* Bottom-left oval: jar */}
-          <div style={{
+          <div className="hero-side-card hero-card-bottom" style={{
             position: 'absolute', bottom: 30, left: 10,
             width: 95, height: 115,
             borderRadius: '50%',
@@ -434,7 +434,7 @@ function HeroSection() {
           </div>
 
           {/* Thin line decoration */}
-          <div style={{
+          <div className="hero-line-decoration" style={{
             position: 'absolute', top: 60, left: 30, right: 30, bottom: 60,
             borderRadius: '50%',
             border: '1px solid rgba(195,163,106,0.15)',
@@ -442,8 +442,8 @@ function HeroSection() {
           }} />
 
           {/* Gold sparkles near photo */}
-          <Sparkle size={10} className="sparkle" data-gsap="sparkle" style={{ position: 'absolute', top: 80, left: 55, color: '#C3A36A', zIndex: 5 }} />
-          <Sparkle size={7} className="sparkle-delay" data-gsap="sparkle" style={{ position: 'absolute', bottom: 90, right: 40, color: '#D7AAA8', zIndex: 5 }} />
+          <Sparkle size={10} className="sparkle hero-photo-sparkle" data-gsap="sparkle" style={{ position: 'absolute', top: 80, left: 55, color: '#C3A36A', zIndex: 5 }} />
+          <Sparkle size={7} className="sparkle-delay hero-photo-sparkle" data-gsap="sparkle" style={{ position: 'absolute', bottom: 90, right: 40, color: '#D7AAA8', zIndex: 5 }} />
         </div>
       </div>
 
@@ -493,7 +493,7 @@ function BrandsSection() {
         </div>
 
         {/* Logo row */}
-        <div style={{
+        <div className="brands-row" style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           gap: 0, flexWrap: 'wrap',
           borderTop: '1px solid rgba(77,7,21,0.12)',
@@ -581,7 +581,7 @@ function AboutSection() {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: 32, marginTop: 40 }}>
+          <div className="about-attributes" style={{ display: 'flex', gap: 32, marginTop: 40 }}>
             {attrs.map((a) => (
               <div key={a.label} style={{ textAlign: 'center' }}>
                 <div style={{
@@ -605,9 +605,9 @@ function AboutSection() {
         </div>
 
         {/* Right — oval photo */}
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', minHeight: 420 }}>
+        <div className="about-photo-stage" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', minHeight: 420 }}>
           {/* Outer decorative oval border */}
-          <div style={{
+          <div className="about-oval-border" style={{
             position: 'absolute',
             width: 300, height: 380,
             borderRadius: '50%',
@@ -615,7 +615,7 @@ function AboutSection() {
             transform: 'translate(14px, 14px)',
           }} />
           {/* Photo container */}
-          <div style={{
+          <div className="about-photo" style={{
             width: 280, height: 360,
             borderRadius: '50%',
             overflow: 'hidden',
@@ -703,13 +703,14 @@ function ContentFormatsSection() {
           </h2>
         </div>
 
-        <div style={{
+        <div className="formats-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           borderTop: '1px solid rgba(77,7,21,0.15)',
         }}>
           {formats.map((f, i) => (
             <div
+              className="format-card"
               key={f.title}
               style={{
                 padding: '36px 28px',
@@ -784,7 +785,7 @@ function VideoPortfolioSection() {
           </h2>
 
           {/* Filters */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <div className="portfolio-filters" style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
             {filters.map((f) => (
               <button
                 key={f}
@@ -807,7 +808,7 @@ function VideoPortfolioSection() {
         </div>
 
         {/* Phone mockup grid */}
-        <div style={{
+        <div className="video-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
           gap: 20,
@@ -815,6 +816,7 @@ function VideoPortfolioSection() {
         }}>
           {filtered.map((v) => (
             <div
+              className="video-card"
               key={v.id}
               onClick={() => setModalVideo(v)}
               style={{
@@ -825,7 +827,7 @@ function VideoPortfolioSection() {
               onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(1)')}
             >
               {/* Phone frame */}
-              <div style={{
+              <div className="phone-frame" style={{
                 width: 140, height: 252,
                 borderRadius: 24,
                 border: '2px solid rgba(255,255,255,0.18)',
@@ -886,6 +888,7 @@ function VideoPortfolioSection() {
         <div style={{ textAlign: 'center', marginTop: 56 }}>
           <a
             href="#contacto"
+            className="video-modal"
             style={{
               fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
               letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -1010,12 +1013,13 @@ function ServicesSection() {
           </h2>
         </div>
 
-        <div style={{
+        <div className="pricing-grid" style={{
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
           gap: 20, marginBottom: 32,
         }} id="tarifas">
           {pricingCards.map((card) => (
             <div
+              className="pricing-card"
               key={card.title}
               style={{
                 backgroundColor: '#F5F0E9',
@@ -1113,7 +1117,7 @@ function ServicesSection() {
               Mi proceso de trabajo
             </div>
           </div>
-          <div style={{ maxWidth: 560, margin: '0 auto', position: 'relative' }}>
+          <div className="process-list" style={{ maxWidth: 560, margin: '0 auto', position: 'relative' }}>
             {/* Vertical line */}
             <div style={{
               position: 'absolute', left: 20, top: 40, bottom: 40,
@@ -1183,9 +1187,10 @@ function TestimonialsSection() {
         </div>
 
         {/* Stat cards */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20, marginBottom: 40 }}>
+        <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20, marginBottom: 40 }}>
           {stats.map((s) => (
             <div
+              className="stat-card"
               key={s.value}
               style={{
                 backgroundColor: '#FAF7F2', border: '1px solid rgba(77,7,21,0.12)',
@@ -1216,7 +1221,7 @@ function TestimonialsSection() {
         </div>
 
         {/* Testimonial card */}
-        <div style={{
+        <div className="testimonial-card" style={{
           backgroundColor: '#4D0715',
           padding: '48px 48px',
           position: 'relative',
@@ -1305,8 +1310,8 @@ function ContactSection() {
         </div>
 
         {/* Center — oval photo */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <div style={{
+        <div className="contact-photo-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
+          <div className="contact-photo" style={{
             width: 140, height: 180,
             borderRadius: '50%',
             overflow: 'hidden',
@@ -1385,7 +1390,7 @@ function Footer() {
       borderTop: '1px solid rgba(195,163,106,0.2)',
       padding: '36px 24px',
     }}>
-      <div style={{
+      <div className="footer-inner" style={{
         maxWidth: 1280, margin: '0 auto',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20,
       }}>
@@ -1440,6 +1445,7 @@ function Footer() {
 function WhatsAppButton() {
   return (
     <a
+      className="whatsapp-float"
       href="https://wa.me/5401100000000"
       aria-label="Contactar por WhatsApp"
       style={{
