@@ -10,13 +10,13 @@ type ScrollFrameSequence = {
 const scrollFrameSequences = {
   landscape: {
     id: 'landscape',
-    frameCount: 150,
-    framePath: (index: number) => `/video-jenny/${String(index).padStart(3, '0')}.png`,
+    frameCount: 60,
+    framePath: (index: number) => `/video-jenny/frame-${String(index).padStart(2, '0')}.jpg`,
   },
   portrait: {
     id: 'portrait',
-    frameCount: 150,
-    framePath: (index: number) => `/video-jenny/${String(index).padStart(3, '0')}.png`,
+    frameCount: 60,
+    framePath: (index: number) => `/video-jenny/frame-${String(index).padStart(2, '0')}.jpg`,
   },
 } satisfies Record<string, ScrollFrameSequence>
 

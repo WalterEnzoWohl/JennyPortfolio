@@ -101,6 +101,7 @@
 
 # Public animation frames must be regular Git blobs so Vercel can serve them.
 public/video-jenny/*.png -filter -diff -merge -text
+public/video-jenny/frame-*.jpg -filter -diff -merge -text
 
 # ---------------------------------------------------------------------------
 # Databases
