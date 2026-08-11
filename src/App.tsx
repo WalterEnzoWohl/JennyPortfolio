@@ -1,5 +1,18 @@
-import { useState, useEffect, useRef, type RefObject, type SVGProps } from 'react'
+import { useState, useEffect, useRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction, type SVGProps } from 'react'
+import AdminPage from './AdminPage'
+import type { ContactIcon, ImageAsset, PortfolioContent, VideoItem } from './content'
+import {
+  cloneContent,
+  getRemovedMediaPaths,
+  hydrateContentVideos,
+  loadStoredContent,
+  readStoredContent,
+  saveStoredContent,
+  uploadPortfolioMedia,
+  usePortfolioContent,
+} from './contentStorage'
 import { useHeroIntroAnimation } from './hooks/useHeroIntroAnimation'
+import { recordPortfolioVisit } from './visitTracking'
 
 type ScrollFrameSequence = {
   id: 'landscape' | 'portrait'
@@ -160,6 +173,141 @@ function useScrollFrameBackground(containerRef: RefObject<HTMLDivElement | null>
   }, [containerRef])
 }
 
+type ContentPath = Array<string | number>
+
+type PortfolioEditor = {
+  isEditing: boolean
+  setText: (path: ContentPath, value: string) => void
+  setContent: Dispatch<SetStateAction<PortfolioContent>>
+}
+
+type EditableTextProps = {
+  value: string
+  path: ContentPath
+  editor?: PortfolioEditor
+  className?: string
+  style?: CSSProperties
+  as?: 'span' | 'div'
+}
+
+function useAdminPortfolioContent() {
+  const [content, setContent] = useState<PortfolioContent>(() => readStoredContent())
+  const [message, setMessage] = useState('')
+  const [saving, setSaving] = useState(false)
+  const objectUrlsRef = useRef<string[]>([])
+  const persistedContentRef = useRef<PortfolioContent>(readStoredContent())
+
+  useEffect(() => {
+    let active = true
+
+    const hydrate = async () => {
+      try {
+        const stored = await loadStoredContent()
+        const hydrated = await hydrateContentVideos(stored)
+        if (!active) return
+
+        objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+        objectUrlsRef.current = hydrated.objectUrls
+        persistedContentRef.current = cloneContent(hydrated.content)
+        setContent(hydrated.content)
+      } catch {
+        if (active) setMessage('No se pudo cargar el contenido de Supabase.')
+      }
+    }
+
+    void hydrate()
+
+    return () => {
+      active = false
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+      objectUrlsRef.current = []
+    }
+  }, [])
+
+  const save = async () => {
+    setSaving(true)
+    setMessage('Guardando...')
+
+    try {
+      const removedPaths = getRemovedMediaPaths(persistedContentRef.current, content)
+      await saveStoredContent(content, removedPaths)
+      persistedContentRef.current = cloneContent(content)
+      setMessage('Cambios guardados en Supabase.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No se pudieron guardar los cambios.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const setText = (path: ContentPath, value: string) => {
+    setContent((current) => setContentValue(current, path, value))
+    setMessage('')
+  }
+
+  const editor: PortfolioEditor = {
+    isEditing: true,
+    setText,
+    setContent,
+  }
+
+  return { content, setContent, editor, save, message, saving, setMessage }
+}
+
+function EditableText({ value, path, editor, className, style, as = 'span' }: EditableTextProps) {
+  if (!editor?.isEditing) {
+    const Tag = as
+    return <Tag className={className} style={style}>{value}</Tag>
+  }
+
+  const Tag = as
+
+  return (
+    <Tag
+      className={`admin-editable-text${className ? ` ${className}` : ''}`}
+      style={style}
+      contentEditable
+      suppressContentEditableWarning
+      spellCheck={false}
+      onClick={(event) => event.stopPropagation()}
+      onBlur={(event) => editor.setText(path, event.currentTarget.textContent ?? '')}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' && as === 'span') {
+          event.preventDefault()
+          ;(event.currentTarget as HTMLElement).blur()
+        }
+      }}
+    >
+      {value}
+    </Tag>
+  )
+}
+
+function setContentValue(content: PortfolioContent, path: ContentPath, value: string): PortfolioContent {
+  const next = cloneContent(content)
+  let cursor: any = next
+
+  path.slice(0, -1).forEach((segment) => {
+    cursor = cursor[segment]
+  })
+
+  cursor[path[path.length - 1]] = value
+  return next
+}
+
+function updateContentValue<T>(content: PortfolioContent, path: ContentPath, updater: (value: T) => T): PortfolioContent {
+  const next = cloneContent(content)
+  let cursor: any = next
+
+  path.slice(0, -1).forEach((segment) => {
+    cursor = cursor[segment]
+  })
+
+  const key = path[path.length - 1]
+  cursor[key] = updater(cursor[key])
+  return next
+}
+
 // ─── Decorative SVG Icons ─────────────────────────────────────────────────────
 
 function Sparkle({ size = 14, className = '', ...props }: SVGProps<SVGSVGElement> & { size?: number }) {
@@ -243,7 +391,26 @@ function IconEmail({ size = 18 }: { size?: number }) {
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 
-function Navbar() {
+function getContactIcon(icon: ContactIcon, size?: number) {
+  switch (icon) {
+    case 'whatsapp':
+      return <IconWhatsApp size={size ?? 22} />
+    case 'email':
+      return <IconEmail size={size ?? 18} />
+    case 'instagram':
+      return <IconInstagram size={size ?? 18} />
+    case 'tiktok':
+      return <IconTikTok size={size ?? 18} />
+    case 'map':
+      return <IconMapPin />
+  }
+}
+
+function getLargePosterSrc(src: string) {
+  return src.includes('w=300&h=540') ? src.replace('w=300&h=540', 'w=640&h=1136') : src
+}
+
+function Navbar({ content, editor }: { content: PortfolioContent['nav']; editor?: PortfolioEditor }) {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -253,14 +420,7 @@ function Navbar() {
     return () => window.removeEventListener('scroll', handler)
   }, [])
 
-  const links = [
-    { label: 'Inicio', href: '#inicio' },
-    { label: 'Sobre mí', href: '#sobre-mi' },
-    { label: 'Portfolio', href: '#portfolio' },
-    { label: 'Servicios', href: '#servicios' },
-    { label: 'Tarifas', href: '#tarifas' },
-    { label: 'Contacto', href: '#contacto' },
-  ]
+  const links = content.links
 
   return (
     <nav
@@ -279,19 +439,24 @@ function Navbar() {
     >
       <div className="nav-inner" style={{ maxWidth: 1280, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72 }}>
         {/* Logo */}
-        <a href="#inicio" style={{ textDecoration: 'none' }} data-gsap="nav-logo">
+        <a href="#inicio" style={{ textDecoration: 'none' }} data-gsap="nav-logo" onClick={(event) => editor?.isEditing && event.preventDefault()}>
           <div style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', color: '#FAF7F2', lineHeight: 1.1, letterSpacing: '0.08em' }}>
-            <div style={{ fontSize: 13, fontWeight: 400, opacity: 0.7, letterSpacing: '0.25em', textTransform: 'uppercase' }}>Jennifer</div>
-            <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Wohl</div>
+            <div style={{ fontSize: 13, fontWeight: 400, opacity: 0.7, letterSpacing: '0.25em', textTransform: 'uppercase' }}>
+              <EditableText value={content.logoEyebrow} path={['nav', 'logoEyebrow']} editor={editor} />
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 600, letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+              <EditableText value={content.logoName} path={['nav', 'logoName']} editor={editor} />
+            </div>
           </div>
         </a>
 
         {/* Desktop links */}
         <div style={{ display: 'flex', gap: 36, alignItems: 'center' }} className="hidden md:flex nav-links">
-          {links.map((l) => (
+          {links.map((l, i) => (
             <a
               key={l.href}
               href={l.href}
+              onClick={(event) => editor?.isEditing && event.preventDefault()}
               data-gsap="nav-item"
               style={{
                 fontFamily: 'Manrope, sans-serif',
@@ -306,7 +471,7 @@ function Navbar() {
               onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#C3A36A')}
               onMouseLeave={(e) => ((e.target as HTMLElement).style.color = 'rgba(245,240,233,0.75)')}
             >
-              {l.label}
+              <EditableText value={l.label} path={['nav', 'links', i, 'label']} editor={editor} />
             </a>
           ))}
         </div>
@@ -315,6 +480,7 @@ function Navbar() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <a
             href="#contacto"
+            onClick={(event) => editor?.isEditing && event.preventDefault()}
             data-gsap="nav-item"
             style={{
               fontFamily: 'Manrope, sans-serif',
@@ -341,7 +507,7 @@ function Navbar() {
               el.style.color = '#F5F0E9'
             }}
           >
-            Trabajemos juntos +
+            <EditableText value={content.cta} path={['nav', 'cta']} editor={editor} />
           </a>
           <button
             onClick={() => setMenuOpen(!menuOpen)}
@@ -359,11 +525,14 @@ function Navbar() {
       {/* Mobile menu */}
       {menuOpen && (
         <div style={{ backgroundColor: '#21070D', borderTop: '1px solid rgba(195,163,106,0.15)', padding: '20px 24px 24px' }} className="md:hidden mobile-menu-panel">
-          {links.map((l) => (
+          {links.map((l, i) => (
             <a
               key={l.href}
               href={l.href}
-              onClick={() => setMenuOpen(false)}
+              onClick={(event) => {
+                if (editor?.isEditing) event.preventDefault()
+                setMenuOpen(false)
+              }}
               style={{
                 display: 'block',
                 fontFamily: 'Manrope, sans-serif',
@@ -377,12 +546,15 @@ function Navbar() {
                 borderBottom: '1px solid rgba(245,240,233,0.08)',
               }}
             >
-              {l.label}
+              <EditableText value={l.label} path={['nav', 'links', i, 'label']} editor={editor} />
             </a>
           ))}
           <a
             href="#contacto"
-            onClick={() => setMenuOpen(false)}
+            onClick={(event) => {
+              if (editor?.isEditing) event.preventDefault()
+              setMenuOpen(false)
+            }}
             style={{
               display: 'block',
               marginTop: 16,
@@ -398,7 +570,7 @@ function Navbar() {
               textAlign: 'center',
             }}
           >
-            Trabajemos juntos +
+            <EditableText value={content.cta} path={['nav', 'cta']} editor={editor} />
           </a>
         </div>
       )}
@@ -408,7 +580,7 @@ function Navbar() {
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
-function HeroSection() {
+function HeroSection({ content, editor }: { content: PortfolioContent['hero']; editor?: PortfolioEditor }) {
   return (
     <section
       id="inicio"
@@ -445,7 +617,7 @@ function HeroSection() {
             border: '1px solid rgba(195,163,106,0.35)', padding: '6px 14px',
           }} data-gsap="hero-eyebrow">
             <Sparkle size={8} />
-            Creadora de contenido UGC
+            <EditableText value={content.eyebrow} path={['hero', 'eyebrow']} editor={editor} />
           </div>
 
           <h1 style={{
@@ -457,15 +629,19 @@ function HeroSection() {
             marginBottom: 28,
             letterSpacing: '-0.01em',
           }}>
-            <span style={{ display: 'block', overflow: 'hidden' }}>
-              <span data-gsap="hero-title-line" style={{ display: 'block' }}>Contenido</span>
-            </span>
-            <span style={{ display: 'block', overflow: 'hidden' }}>
-              <span data-gsap="hero-title-line" style={{ display: 'block' }}>auténtico que</span>
-            </span>
-            <span style={{ display: 'block', overflow: 'hidden' }}>
-              <span data-gsap="hero-title-line" style={{ display: 'block', color: '#D7AAA8', fontStyle: 'italic' }}>conecta y convierte</span>
-            </span>
+            {content.titleLines.map((line, index) => (
+              <span key={`${line}-${index}`} style={{ display: 'block', overflow: 'hidden' }}>
+                <span
+                  data-gsap="hero-title-line"
+                  style={{
+                    display: 'block',
+                    ...(index === content.titleLines.length - 1 ? { color: '#D7AAA8', fontStyle: 'italic' } : {}),
+                  }}
+                >
+                  <EditableText value={line} path={['hero', 'titleLines', index]} editor={editor} />
+                </span>
+              </span>
+            ))}
           </h1>
 
           <p style={{
@@ -477,12 +653,13 @@ function HeroSection() {
             marginBottom: 40,
             maxWidth: 440,
           }} data-gsap="hero-description">
-            Creo videos orgánicos, visualmente cuidados y pensados para que las marcas muestren sus productos de una forma cercana, confiable y natural.
+            <EditableText value={content.description} path={['hero', 'description']} editor={editor} />
           </p>
 
           <div className="hero-actions" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 40 }}>
             <a
               href="#portfolio"
+              onClick={(event) => editor?.isEditing && event.preventDefault()}
               data-gsap="hero-action"
               style={{
                 fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
@@ -494,10 +671,11 @@ function HeroSection() {
               onMouseEnter={(e) => { const el = e.target as HTMLElement; el.style.backgroundColor = '#C3A36A' }}
               onMouseLeave={(e) => { const el = e.target as HTMLElement; el.style.backgroundColor = '#FAF7F2' }}
             >
-              Ver portfolio →
+              <EditableText value={content.primaryCta} path={['hero', 'primaryCta']} editor={editor} />
             </a>
             <a
               href="#contacto"
+              onClick={(event) => editor?.isEditing && event.preventDefault()}
               data-gsap="hero-action"
               style={{
                 fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
@@ -510,13 +688,15 @@ function HeroSection() {
               onMouseEnter={(e) => { const el = e.target as HTMLElement; el.style.borderColor = '#C3A36A'; el.style.color = '#C3A36A' }}
               onMouseLeave={(e) => { const el = e.target as HTMLElement; el.style.borderColor = 'rgba(245,240,233,0.4)'; el.style.color = '#FAF7F2' }}
             >
-              Solicitar propuesta +
+              <EditableText value={content.secondaryCta} path={['hero', 'secondaryCta']} editor={editor} />
             </a>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(245,240,233,0.5)', marginBottom: 40 }} data-gsap="hero-meta">
             <IconMapPin />
-            <span style={{ fontFamily: 'Manrope, sans-serif', fontSize: 12, letterSpacing: '0.05em' }}>Benavídez, Buenos Aires, Argentina</span>
+            <span style={{ fontFamily: 'Manrope, sans-serif', fontSize: 12, letterSpacing: '0.05em' }}>
+              <EditableText value={content.location} path={['hero', 'location']} editor={editor} />
+            </span>
           </div>
 
           <div className="hero-categories" style={{
@@ -525,10 +705,10 @@ function HeroSection() {
             letterSpacing: '0.18em', textTransform: 'uppercase',
             color: 'rgba(245,240,233,0.45)',
           }} data-gsap="hero-meta">
-            {['Beauty', 'Skincare', 'Lifestyle', 'Reviews'].map((cat, i) => (
+            {content.categories.map((cat, i) => (
               <span key={cat} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 {i > 0 && <span style={{ margin: '0 12px', opacity: 0.4 }}>·</span>}
-                {cat}
+                <EditableText value={cat} path={['hero', 'categories', i]} editor={editor} />
               </span>
             ))}
           </div>
@@ -546,8 +726,8 @@ function HeroSection() {
             backgroundColor: '#c8a882',
           }} data-gsap="hero-image">
             <img
-              src="https://images.unsplash.com/photo-1670201203116-26644750a726?w=560&h=800&fit=crop&auto=format&q=85"
-              alt="Jennifer Wohl, creadora de contenido UGC de beauty y skincare"
+              src={content.mainImage.src}
+              alt={content.mainImage.alt}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           </div>
@@ -571,8 +751,8 @@ function HeroSection() {
             boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
           }} data-gsap="hero-card">
             <img
-              src="https://images.unsplash.com/photo-1585945037805-5fd82c2e60b1?w=220&h=260&fit=crop&auto=format&q=80"
-              alt="Textura de crema skincare"
+              src={content.sideImages[0]?.src}
+              alt={content.sideImages[0]?.alt ?? ''}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           </div>
@@ -588,8 +768,8 @@ function HeroSection() {
             boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
           }} data-gsap="hero-card">
             <img
-              src="https://images.unsplash.com/photo-1608068811588-3a67006b7489?w=190&h=230&fit=crop&auto=format&q=80"
-              alt="Envase de producto de skincare"
+              src={content.sideImages[1]?.src}
+              alt={content.sideImages[1]?.alt ?? ''}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           </div>
@@ -623,8 +803,8 @@ function HeroSection() {
 
 // ─── Brands ───────────────────────────────────────────────────────────────────
 
-function BrandsSection() {
-  const brands = ["L'Oréal", "YesStyle", "Dove", "Garnier", "Forme", "Disker"]
+function BrandsSection({ content, editor }: { content: PortfolioContent['brands']; editor?: PortfolioEditor }) {
+  const brands = content.items
 
   return (
     <section id="marcas" style={{ backgroundColor: '#F5F0E9', padding: '72px 24px' }}>
@@ -635,21 +815,23 @@ function BrandsSection() {
             letterSpacing: '0.22em', textTransform: 'uppercase',
             color: '#C3A36A', marginBottom: 16,
           }}>
-            Marcas que confían en mí
+            <EditableText value={content.eyebrow} path={['brands', 'eyebrow']} editor={editor} />
           </div>
           <h2 style={{
             fontFamily: 'Cormorant Garamond, Georgia, serif',
             fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 600,
             color: '#1B1013', marginBottom: 16, lineHeight: 1.1,
           }}>
-            Experiencia con marcas<br />
-            <em style={{ fontStyle: 'italic', color: '#4D0715' }}>que inspiran</em>
+            <EditableText value={content.titleLine} path={['brands', 'titleLine']} editor={editor} /><br />
+            <em style={{ fontStyle: 'italic', color: '#4D0715' }}>
+              <EditableText value={content.titleAccent} path={['brands', 'titleAccent']} editor={editor} />
+            </em>
           </h2>
           <p style={{
             fontFamily: 'Manrope, sans-serif', fontSize: 14, lineHeight: 1.75,
             color: 'rgba(27,16,19,0.65)', maxWidth: 520, margin: '0 auto',
           }}>
-            En mis primeros meses como creadora UGC participé en programas y colaboraciones que me permitieron desarrollar contenido para belleza, cuidado personal y experiencias digitales.
+            <EditableText value={content.description} path={['brands', 'description']} editor={editor} />
           </p>
         </div>
 
@@ -677,7 +859,7 @@ function BrandsSection() {
                 onMouseEnter={(e) => ((e.target as HTMLElement).style.opacity = '1')}
                 onMouseLeave={(e) => ((e.target as HTMLElement).style.opacity = '0.75')}
               >
-                {brand}
+                <EditableText value={brand} path={['brands', 'items', i]} editor={editor} />
               </span>
             </div>
           ))}
@@ -689,12 +871,8 @@ function BrandsSection() {
 
 // ─── About ────────────────────────────────────────────────────────────────────
 
-function AboutSection() {
-  const attrs = [
-    { label: 'Auténtica', icon: '✦' },
-    { label: 'Creativa', icon: '◈' },
-    { label: 'Detallista', icon: '◎' },
-  ]
+function AboutSection({ content, editor }: { content: PortfolioContent['about']; editor?: PortfolioEditor }) {
+  const attrs = content.attributes
 
   return (
     <section id="sobre-mi" style={{ backgroundColor: '#FAF7F2', padding: '96px 24px', position: 'relative', overflow: 'hidden' }}>
@@ -717,33 +895,29 @@ function AboutSection() {
             letterSpacing: '0.22em', textTransform: 'uppercase',
             color: '#C3A36A', marginBottom: 20,
           }}>
-            Sobre mí
+            <EditableText value={content.eyebrow} path={['about', 'eyebrow']} editor={editor} />
           </div>
           <h2 style={{
             fontFamily: 'Cormorant Garamond, Georgia, serif',
             fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: 600,
             color: '#1B1013', marginBottom: 32, lineHeight: 1.05,
           }}>
-            Hola, soy <em style={{ color: '#4D0715', fontStyle: 'italic' }}>Jenni</em>
+            <EditableText value={content.titlePrefix} path={['about', 'titlePrefix']} editor={editor} />{' '}
+            <em style={{ color: '#4D0715', fontStyle: 'italic' }}>
+              <EditableText value={content.titleAccent} path={['about', 'titleAccent']} editor={editor} />
+            </em>
           </h2>
 
           <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 14, lineHeight: 1.85, color: 'rgba(27,16,19,0.72)' }}>
-            <p style={{ marginBottom: 16 }}>
-              Soy creadora de contenido UGC de Benavídez, Buenos Aires. Me especializo en producir videos auténticos y visualmente cuidados para marcas de belleza, skincare, cuidado personal y estilo de vida.
-            </p>
-            <p style={{ marginBottom: 16 }}>
-              Creo contenido que muestra la experiencia real con cada producto: su textura, aplicación, beneficios, empaque y resultado final.
-            </p>
-            <p style={{ marginBottom: 16 }}>
-              Trabajo con reseñas honestas, rutinas paso a paso, unboxings, tutoriales y formatos dinámicos pensados para Instagram Reels, TikTok y campañas publicitarias.
-            </p>
-            <p>
-              Mi objetivo es que cada pieza se sienta cercana y orgánica, sin perder la estética y el mensaje de la marca.
-            </p>
+            {content.paragraphs.map((paragraph, index) => (
+              <p key={`${paragraph}-${index}`} style={{ marginBottom: index < content.paragraphs.length - 1 ? 16 : 0 }}>
+                <EditableText value={paragraph} path={['about', 'paragraphs', index]} editor={editor} />
+              </p>
+            ))}
           </div>
 
           <div className="about-attributes" style={{ display: 'flex', gap: 32, marginTop: 40 }}>
-            {attrs.map((a) => (
+            {attrs.map((a, i) => (
               <div key={a.label} style={{ textAlign: 'center' }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: '50%',
@@ -758,7 +932,7 @@ function AboutSection() {
                   fontFamily: 'Manrope, sans-serif', fontSize: 10, fontWeight: 700,
                   letterSpacing: '0.16em', textTransform: 'uppercase', color: '#4D0715',
                 }}>
-                  {a.label}
+                  <EditableText value={a.label} path={['about', 'attributes', i, 'label']} editor={editor} />
                 </span>
               </div>
             ))}
@@ -781,40 +955,9 @@ function AboutSection() {
 
 // ─── Content Formats ──────────────────────────────────────────────────────────
 
-const formats = [
-  {
-    icon: '📦',
-    title: 'Unboxing y hauls',
-    desc: 'Apertura del producto, primeras impresiones, empaque y presentación de características.',
-  },
-  {
-    icon: '🧴',
-    title: 'Rutinas y aplicación',
-    desc: 'Skincare, maquillaje y demostraciones paso a paso integradas en una rutina real.',
-  },
-  {
-    icon: '⭐',
-    title: 'Reviews y testimonios',
-    desc: 'Opiniones auténticas, beneficios, experiencia de uso y recomendación del producto.',
-  },
-  {
-    icon: '✨',
-    title: 'GRWM y lifestyle',
-    desc: 'Contenido cotidiano, visitas, cursos, experiencias y productos integrados naturalmente.',
-  },
-  {
-    icon: '📷',
-    title: 'Fotografía de producto',
-    desc: 'Imágenes editoriales, estéticas y detalladas para redes sociales, ecommerce y campañas.',
-  },
-  {
-    icon: '🎬',
-    title: 'Tutoriales y aplicaciones',
-    desc: 'Videos explicativos, green screen, voiceover y recorridos paso a paso por plataformas.',
-  },
-]
+function ContentFormatsSection({ content, editor }: { content: PortfolioContent['formats']; editor?: PortfolioEditor }) {
+  const formats = content.items
 
-function ContentFormatsSection() {
   return (
     <section id="formatos" style={{ backgroundColor: '#F5F0E9', padding: '96px 24px' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
@@ -824,15 +967,17 @@ function ContentFormatsSection() {
             letterSpacing: '0.22em', textTransform: 'uppercase',
             color: '#C3A36A', marginBottom: 16,
           }}>
-            Formatos de contenido
+            <EditableText value={content.eyebrow} path={['formats', 'eyebrow']} editor={editor} />
           </div>
           <h2 style={{
             fontFamily: 'Cormorant Garamond, Georgia, serif',
             fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: 600,
             color: '#1B1013', lineHeight: 1.1,
           }}>
-            Contenido pensado para<br />
-            <em style={{ color: '#4D0715', fontStyle: 'italic' }}>cada objetivo</em>
+            <EditableText value={content.titleLine} path={['formats', 'titleLine']} editor={editor} /><br />
+            <em style={{ color: '#4D0715', fontStyle: 'italic' }}>
+              <EditableText value={content.titleAccent} path={['formats', 'titleAccent']} editor={editor} />
+            </em>
           </h2>
         </div>
 
@@ -869,13 +1014,13 @@ function ContentFormatsSection() {
                 fontSize: 20, fontWeight: 600, color: '#1B1013',
                 marginBottom: 10, lineHeight: 1.2,
               }}>
-                {f.title}
+                <EditableText value={f.title} path={['formats', 'items', i, 'title']} editor={editor} />
               </h3>
               <p style={{
                 fontFamily: 'Manrope, sans-serif', fontSize: 12.5, lineHeight: 1.7,
                 color: 'rgba(27,16,19,0.6)',
               }}>
-                {f.desc}
+                <EditableText value={f.desc} path={['formats', 'items', i, 'desc']} editor={editor} />
               </p>
             </div>
           ))}
@@ -887,23 +1032,66 @@ function ContentFormatsSection() {
 
 // ─── Video Portfolio ──────────────────────────────────────────────────────────
 
-const videos = [
-  { id: 1, brand: 'YesStyle', title: 'Rutina Skincare Paso a Paso', cat: 'Skincare', img: 'https://images.unsplash.com/photo-1670201203116-26644750a726?w=300&h=540&fit=crop&auto=format&q=80' },
-  { id: 2, brand: 'Garnier', title: 'Textura y Demostración', cat: 'Skincare', img: 'https://images.unsplash.com/photo-1605769574581-b2511b6afa08?w=300&h=540&fit=crop&auto=format&q=80' },
-  { id: 3, brand: 'Garnier', title: 'Unboxing y Rutina Completa', cat: 'Skincare', img: 'https://images.unsplash.com/photo-1728727267814-792db55ce678?w=300&h=540&fit=crop&auto=format&q=80' },
-  { id: 4, brand: 'La Roche-Posay', title: 'Product Haul & Aesthetic', cat: 'Skincare', img: 'https://images.unsplash.com/photo-1695990190064-e8ca2ca16af6?w=300&h=540&fit=crop&auto=format&q=80' },
-  { id: 5, brand: 'Visage Brushes', title: 'ASMR & Unboxing', cat: 'Makeup', img: 'https://images.unsplash.com/photo-1582616698198-f978da534162?w=300&h=540&fit=crop&auto=format&q=80' },
-  { id: 6, brand: 'Makeup Masterclass', title: 'GRWM & Before/After', cat: 'Makeup', img: 'https://images.unsplash.com/photo-1585945037805-5fd82c2e60b1?w=300&h=540&fit=crop&auto=format&q=80' },
-  { id: 7, brand: 'Ringo Audio', title: 'Unboxing & Review', cat: 'Lifestyle', img: 'https://images.unsplash.com/photo-1608068811588-3a67006b7489?w=300&h=540&fit=crop&auto=format&q=80' },
-  { id: 8, brand: 'PedidosYa', title: 'Tutorial App & Cupones', cat: 'Apps y tecnología', img: 'https://images.unsplash.com/photo-1728994062543-74a1dc2c9392?w=300&h=540&fit=crop&auto=format&q=80' },
-]
-
-function VideoPortfolioSection() {
-  const filters = ['Todos', 'Skincare', 'Makeup', 'Lifestyle', 'Apps y tecnología']
+function VideoPortfolioSection({ content, editor }: { content: PortfolioContent['videos']; editor?: PortfolioEditor }) {
+  const videos = editor?.isEditing ? content.items : content.items.filter((video) => !video.hidden)
+  const filters = Array.from(new Set([...content.filters, ...videos.map((video) => video.cat)])).filter(Boolean)
   const [active, setActive] = useState('Todos')
-  const [modalVideo, setModalVideo] = useState<typeof videos[0] | null>(null)
+  const [modalVideo, setModalVideo] = useState<VideoItem | null>(null)
+  const [editorModalVideo, setEditorModalVideo] = useState<VideoItem | 'new' | null>(null)
 
   const filtered = active === 'Todos' ? videos : videos.filter((v) => v.cat === active)
+
+  const updateVideos = (updater: (items: VideoItem[]) => VideoItem[]) => {
+    editor?.setContent((current) => updateContentValue<VideoItem[]>(current, ['videos', 'items'], updater))
+  }
+
+  const moveVideo = (id: string, direction: -1 | 1) => {
+    updateVideos((items) => {
+      const index = items.findIndex((video) => video.id === id)
+      const nextIndex = index + direction
+      if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return items
+
+      const next = [...items]
+      const [video] = next.splice(index, 1)
+      next.splice(nextIndex, 0, video)
+      return next
+    })
+  }
+
+  const toggleHidden = (id: string) => {
+    updateVideos((items) => items.map((video) => video.id === id ? { ...video, hidden: !video.hidden } : video))
+  }
+
+  const deleteVideo = async (video: VideoItem) => {
+    if (!window.confirm(`¿Eliminar "${video.title}"?`)) return
+    updateVideos((items) => items.filter((item) => item.id !== video.id))
+  }
+
+  const saveVideo = async (video: VideoItem, file?: File, posterFile?: File) => {
+    const nextVideo = { ...video }
+    const [videoUpload, posterUpload] = await Promise.all([
+      file ? uploadPortfolioMedia(file, 'video', video.id) : Promise.resolve(null),
+      posterFile ? uploadPortfolioMedia(posterFile, 'cover', video.id) : Promise.resolve(null),
+    ])
+
+    if (videoUpload) {
+      nextVideo.storageKey = videoUpload.path
+      nextVideo.videoSrc = videoUpload.publicUrl
+    }
+
+    if (posterUpload) {
+      nextVideo.posterStorageKey = posterUpload.path
+      nextVideo.img = posterUpload.publicUrl
+    }
+
+    updateVideos((items) => {
+      const exists = items.some((item) => item.id === nextVideo.id)
+      return exists ? items.map((item) => item.id === nextVideo.id ? nextVideo : item) : [nextVideo, ...items]
+    })
+    if (!content.filters.includes(nextVideo.cat)) {
+      editor?.setContent((current) => updateContentValue<string[]>(current, ['videos', 'filters'], (items) => [...items, nextVideo.cat]))
+    }
+  }
 
   return (
     <section id="portfolio" style={{ backgroundColor: '#21070D', padding: '96px 24px' }}>
@@ -914,12 +1102,14 @@ function VideoPortfolioSection() {
             fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 600,
             color: '#FAF7F2', lineHeight: 1.1, marginBottom: 40,
           }}>
-            Videos que generan <em style={{ color: '#D7AAA8', fontStyle: 'italic' }}>impacto</em>
+            <EditableText value={content.titlePrefix} path={['videos', 'titlePrefix']} editor={editor} />{' '}
+            <em style={{ color: '#D7AAA8', fontStyle: 'italic' }}>
+              <EditableText value={content.titleAccent} path={['videos', 'titleAccent']} editor={editor} />
+            </em>
           </h2>
 
-          {/* Filters */}
           <div className="portfolio-filters" style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {filters.map((f) => (
+            {filters.map((f, i) => (
               <button
                 key={f}
                 onClick={() => setActive(f)}
@@ -934,32 +1124,39 @@ function VideoPortfolioSection() {
                   transition: 'all 0.2s',
                 }}
               >
-                {f}
+                <EditableText value={f} path={['videos', 'filters', Math.max(0, content.filters.indexOf(f, i))]} editor={content.filters.includes(f) ? editor : undefined} />
               </button>
             ))}
           </div>
         </div>
 
-        {/* Phone mockup grid */}
         <div className="video-grid" style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
           gap: 20,
           justifyItems: 'center',
         }}>
+          {editor?.isEditing && (
+            <button type="button" className="admin-add-video-card" onClick={() => setEditorModalVideo('new')}>
+              <span>+</span>
+              Añadir video
+            </button>
+          )}
+
           {filtered.map((v) => (
             <div
-              className="video-card"
+              className={`video-card${v.hidden ? ' admin-hidden-video' : ''}`}
               key={v.id}
-              onClick={() => setModalVideo(v)}
+              onClick={() => !editor?.isEditing && setModalVideo(v)}
               style={{
-                width: 140, cursor: 'pointer',
+                width: 140, cursor: editor?.isEditing ? 'default' : 'pointer',
                 transition: 'transform 0.25s',
               }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(1.04)')}
+              onMouseEnter={(e) => {
+                if (!editor?.isEditing) (e.currentTarget as HTMLElement).style.transform = 'scale(1.04)'
+              }}
               onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.transform = 'scale(1)')}
             >
-              {/* Phone frame */}
               <div className="phone-frame" style={{
                 width: 140, height: 252,
                 borderRadius: 24,
@@ -969,14 +1166,12 @@ function VideoPortfolioSection() {
                 backgroundColor: '#1B1013',
                 boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
               }}>
-                {/* Notch */}
                 <div style={{
                   position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
                   width: 48, height: 8, backgroundColor: '#000',
                   borderRadius: '0 0 8px 8px', zIndex: 10,
                 }} />
                 <img src={v.img} alt={v.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                {/* Overlay + play */}
                 <div style={{
                   position: 'absolute', inset: 0,
                   background: 'linear-gradient(180deg, transparent 40%, rgba(33,7,13,0.85) 100%)',
@@ -991,6 +1186,7 @@ function VideoPortfolioSection() {
                     <IconPlay />
                   </div>
                 </div>
+                {v.hidden && <div className="admin-hidden-badge">Oculto</div>}
               </div>
               <div style={{ padding: '10px 4px' }}>
                 <div style={{
@@ -1014,6 +1210,16 @@ function VideoPortfolioSection() {
                   {v.cat}
                 </div>
               </div>
+
+              {editor?.isEditing && (
+                <div className="admin-video-card-actions" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" onClick={() => moveVideo(v.id, -1)} aria-label="Mover antes">←</button>
+                  <button type="button" onClick={() => moveVideo(v.id, 1)} aria-label="Mover después">→</button>
+                  <button type="button" onClick={() => setEditorModalVideo(v)}>Editar</button>
+                  <button type="button" onClick={() => toggleHidden(v.id)}>{v.hidden ? 'Mostrar' : 'Ocultar'}</button>
+                  <button type="button" onClick={() => void deleteVideo(v)}>Eliminar</button>
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -1022,6 +1228,7 @@ function VideoPortfolioSection() {
           <a
             href="#contacto"
             className="video-modal"
+            onClick={(event) => editor?.isEditing && event.preventDefault()}
             style={{
               fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
               letterSpacing: '0.14em', textTransform: 'uppercase',
@@ -1032,61 +1239,25 @@ function VideoPortfolioSection() {
             onMouseEnter={(e) => { const el = e.target as HTMLElement; el.style.borderColor = '#C3A36A'; el.style.color = '#C3A36A' }}
             onMouseLeave={(e) => { const el = e.target as HTMLElement; el.style.borderColor = 'rgba(245,240,233,0.35)'; el.style.color = '#FAF7F2' }}
           >
-            Ver más videos →
+            <EditableText value={content.cta} path={['videos', 'cta']} editor={editor} />
           </a>
         </div>
       </div>
 
-      {/* Modal */}
       {modalVideo && (
-        <div
-          onClick={() => setModalVideo(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 200,
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 24,
+        <VideoPreviewModal video={modalVideo} onClose={() => setModalVideo(null)} />
+      )}
+
+      {editor?.isEditing && editorModalVideo && (
+        <VideoEditorModal
+          video={editorModalVideo === 'new' ? null : editorModalVideo}
+          categories={filters.filter((filter) => filter !== 'Todos')}
+          onClose={() => setEditorModalVideo(null)}
+          onSave={async (video, file, posterFile) => {
+            await saveVideo(video, file, posterFile)
+            setEditorModalVideo(null)
           }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'relative', width: 320,
-              borderRadius: 24,
-              overflow: 'hidden',
-              boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
-            }}
-          >
-            <button
-              onClick={() => setModalVideo(null)}
-              style={{
-                position: 'absolute', top: 12, right: 12, zIndex: 10,
-                background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff',
-                width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <IconClose />
-            </button>
-            <img
-              src={modalVideo.img.replace('w=300&h=540', 'w=640&h=1136')}
-              alt={modalVideo.title}
-              style={{ width: '100%', display: 'block' }}
-            />
-            <div style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
-              background: 'linear-gradient(transparent, rgba(33,7,13,0.95))',
-              padding: '40px 24px 28px',
-            }}>
-              <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 10, color: '#C3A36A', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 6 }}>
-                {modalVideo.brand}
-              </div>
-              <div style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 20, fontWeight: 600, color: '#FAF7F2' }}>
-                {modalVideo.title}
-              </div>
-            </div>
-          </div>
-        </div>
+        />
       )}
     </section>
   )
@@ -1094,38 +1265,340 @@ function VideoPortfolioSection() {
 
 // ─── Services & Process ───────────────────────────────────────────────────────
 
-const pricingCards = [
-  {
-    title: '1 Video UGC',
-    price: '$50.000 ARS',
-    items: ['Video de 15 a 60 segundos', 'Guion adaptado', 'Grabación y edición', 'Subtítulos', 'Música libre de derechos', 'Una instancia de ajustes'],
-  },
-  {
-    title: 'Pack 2 Videos',
-    price: '$90.000 ARS',
-    items: ['Dos conceptos o ángulos distintos', 'Variación de gancho', 'Edición profesional', 'Subtítulos'],
-    highlight: true,
-  },
-  {
-    title: 'Pack 3 Videos',
-    price: '$130.000 ARS',
-    items: ['Tres videos: atención, beneficios y CTA', 'Estrategia de contenido', 'Edición profesional', 'Subtítulos'],
-  },
-  {
-    title: 'Servicios adicionales',
-    price: 'A consultar',
-    items: ['Fotografía de producto', 'Material crudo', 'Versiones alternativas', 'Entrega urgente', 'Derechos para publicidad', 'Exclusividad'],
-  },
-]
+function VideoPreviewModal({ video, onClose }: { video: VideoItem; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        backgroundColor: 'rgba(0,0,0,0.85)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative', width: 320,
+          borderRadius: 24,
+          overflow: 'hidden',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
+        }}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: 12, right: 12, zIndex: 10,
+            background: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff',
+            width: 36, height: 36, borderRadius: '50%', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          aria-label="Cerrar video"
+        >
+          <IconClose />
+        </button>
+        {video.videoSrc ? (
+          <video
+            src={video.videoSrc}
+            poster={video.img}
+            controls
+            autoPlay
+            playsInline
+            style={{ width: '100%', display: 'block', backgroundColor: '#000' }}
+          />
+        ) : (
+          <img
+            src={getLargePosterSrc(video.img)}
+            alt={video.title}
+            style={{ width: '100%', display: 'block' }}
+          />
+        )}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: 'linear-gradient(transparent, rgba(33,7,13,0.95))',
+          padding: '40px 24px 28px',
+        }}>
+          <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 10, color: '#C3A36A', letterSpacing: '0.15em', textTransform: 'uppercase', marginBottom: 6 }}>
+            {video.brand}
+          </div>
+          <div style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 20, fontWeight: 600, color: '#FAF7F2' }}>
+            {video.title}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-const processSteps = [
-  { num: '01', title: 'Briefing & Estrategia', desc: 'Definimos objetivos, público, mensaje y plataforma.' },
-  { num: '02', title: 'Guion & Concepto', desc: 'Propuesta visual y narrativa alineada con la marca.' },
-  { num: '03', title: 'Grabación & Edición', desc: 'Producción cuidando iluminación, audio y estética.' },
-  { num: '04', title: 'Entrega', desc: 'Revisión y envío del material final listo para publicar.' },
-]
+function VideoEditorModal({
+  video,
+  categories,
+  onClose,
+  onSave,
+}: {
+  video: VideoItem | null
+  categories: string[]
+  onClose: () => void
+  onSave: (video: VideoItem, file?: File, posterFile?: File) => Promise<void>
+}) {
+  const [draft, setDraft] = useState<VideoItem>(() => video ?? {
+    id: createVideoId(),
+    brand: '',
+    title: '',
+    cat: categories[0] ?? 'Skincare',
+    img: '',
+  })
+  const [videoFile, setVideoFile] = useState<File | undefined>()
+  const [coverFile, setCoverFile] = useState<File | undefined>()
+  const [coverPreview, setCoverPreview] = useState(draft.img)
+  const [crop, setCrop] = useState({ x: 50, y: 50, zoom: 1 })
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-function ServicesSection() {
+  useEffect(() => {
+    return () => {
+      if (coverPreview.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    }
+  }, [coverPreview])
+
+  const handleVideoFile = async (file?: File) => {
+    setVideoFile(file)
+    if (!file || coverFile) return
+
+    try {
+      const poster = await captureVideoPoster(file)
+      setCoverPreview(poster)
+      setDraft((current) => ({ ...current, img: poster }))
+    } catch {
+      setError('No pude leer la portada automática del video.')
+    }
+  }
+
+  const handleCoverFile = (file?: File) => {
+    setCoverFile(file)
+    setError('')
+    if (!file) return
+
+    if (coverPreview.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
+    setCoverPreview(URL.createObjectURL(file))
+    setCrop({ x: 50, y: 50, zoom: 1 })
+  }
+
+  const handleSubmit = async () => {
+    setError('')
+    const brand = draft.brand.trim()
+    const title = draft.title.trim()
+    const cat = draft.cat.trim()
+
+    if (!brand || !title || !cat) {
+      setError('Completá marca, título y categoría.')
+      return
+    }
+
+    if (!video && !videoFile) {
+      setError('Seleccioná un video.')
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      let img = draft.img
+      if (coverFile) {
+        img = await cropImageToPortrait(coverPreview, crop)
+      } else if (!img && videoFile) {
+        img = await captureVideoPoster(videoFile)
+      }
+
+      const posterFile = img.startsWith('data:')
+        ? await dataUrlToFile(img, `${draft.id}-cover.jpg`)
+        : undefined
+
+      await onSave({ ...draft, brand, title, cat, img }, videoFile, posterFile)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'No se pudo guardar el video.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="admin-video-modal" onClick={onClose}>
+      <div className="admin-video-modal-card" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-video-modal-header">
+          <div>
+            <p className="admin-kicker">Portfolio</p>
+            <h2>{video ? 'Editar video' : 'Añadir video'}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Cerrar">
+            <IconClose />
+          </button>
+        </div>
+
+        <div className="admin-video-modal-grid">
+          <div className="admin-video-form">
+            <label>
+              Marca
+              <input value={draft.brand} onChange={(event) => setDraft({ ...draft, brand: event.target.value })} />
+            </label>
+            <label>
+              Título
+              <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+            </label>
+            <label>
+              Categoría
+              <input list="admin-video-categories" value={draft.cat} onChange={(event) => setDraft({ ...draft, cat: event.target.value })} />
+              <datalist id="admin-video-categories">
+                {categories.map((category) => <option value={category} key={category} />)}
+              </datalist>
+            </label>
+            <label>
+              Video
+              <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(event) => void handleVideoFile(event.target.files?.[0])} />
+            </label>
+            <label>
+              Foto de portada
+              <input type="file" accept="image/*" onChange={(event) => handleCoverFile(event.target.files?.[0])} />
+            </label>
+          </div>
+
+          <div className="admin-cover-editor">
+            <div className="admin-cover-frame">
+              {coverPreview ? (
+                <img
+                  src={coverPreview}
+                  alt=""
+                  style={{
+                    objectPosition: `${crop.x}% ${crop.y}%`,
+                    transform: `scale(${crop.zoom})`,
+                  }}
+                />
+              ) : (
+                <span>Portada</span>
+              )}
+            </div>
+            <label>
+              Zoom
+              <input type="range" min="1" max="2.2" step="0.05" value={crop.zoom} onChange={(event) => setCrop({ ...crop, zoom: Number(event.target.value) })} />
+            </label>
+            <label>
+              Horizontal
+              <input type="range" min="0" max="100" value={crop.x} onChange={(event) => setCrop({ ...crop, x: Number(event.target.value) })} />
+            </label>
+            <label>
+              Vertical
+              <input type="range" min="0" max="100" value={crop.y} onChange={(event) => setCrop({ ...crop, y: Number(event.target.value) })} />
+            </label>
+          </div>
+        </div>
+
+        {error && <p className="admin-error">{error}</p>}
+
+        <div className="admin-video-modal-actions">
+          <button type="button" className="admin-secondary-action" onClick={onClose}>Cancelar</button>
+          <button type="button" onClick={() => void handleSubmit()} disabled={busy}>
+            {busy ? 'Subiendo...' : 'Aplicar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function createVideoId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+async function dataUrlToFile(dataUrl: string, fileName: string) {
+  const response = await fetch(dataUrl)
+  if (!response.ok) throw new Error('No se pudo preparar la portada.')
+  const blob = await response.blob()
+  return new File([blob], fileName, { type: blob.type || 'image/jpeg' })
+}
+
+function captureVideoPoster(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+
+    const cleanup = () => {
+      video.removeAttribute('src')
+      video.load()
+      URL.revokeObjectURL(url)
+    }
+
+    const fail = () => {
+      cleanup()
+      reject(new Error('Could not read video frame'))
+    }
+
+    video.muted = true
+    video.playsInline = true
+    video.preload = 'auto'
+    video.onloadeddata = () => {
+      try {
+        const sourceWidth = video.videoWidth || 720
+        const sourceHeight = video.videoHeight || 1280
+        const scale = Math.min(540 / sourceWidth, 1)
+        const width = Math.round(sourceWidth * scale)
+        const height = Math.round(sourceHeight * scale)
+        const canvas = document.createElement('canvas')
+        const context = canvas.getContext('2d')
+
+        if (!context) {
+          fail()
+          return
+        }
+
+        canvas.width = width
+        canvas.height = height
+        context.drawImage(video, 0, 0, width, height)
+        const poster = canvas.toDataURL('image/jpeg', 0.86)
+        cleanup()
+        resolve(poster)
+      } catch {
+        fail()
+      }
+    }
+    video.onerror = fail
+    video.src = url
+    video.load()
+  })
+}
+
+function cropImageToPortrait(src: string, crop: { x: number; y: number; zoom: number }): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => {
+      const width = 540
+      const height = 972
+      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * crop.zoom
+      const drawWidth = image.naturalWidth * scale
+      const drawHeight = image.naturalHeight * scale
+      const dx = drawWidth <= width ? (width - drawWidth) / 2 : (width - drawWidth) * (crop.x / 100)
+      const dy = drawHeight <= height ? (height - drawHeight) / 2 : (height - drawHeight) * (crop.y / 100)
+      const canvas = document.createElement('canvas')
+      const context = canvas.getContext('2d')
+
+      if (!context) {
+        reject(new Error('Could not crop cover'))
+        return
+      }
+
+      canvas.width = width
+      canvas.height = height
+      context.drawImage(image, dx, dy, drawWidth, drawHeight)
+      resolve(canvas.toDataURL('image/jpeg', 0.88))
+    }
+    image.onerror = () => reject(new Error('Could not load cover'))
+    image.src = src
+  })
+}
+
+function ServicesSection({ content, editor }: { content: PortfolioContent['services']; editor?: PortfolioEditor }) {
+  const pricingCards = content.pricingCards
+  const processSteps = content.processSteps
+
   return (
     <section id="servicios" style={{ backgroundColor: '#FAF7F2', padding: '96px 24px' }}>
       <div style={{ maxWidth: 1280, margin: '0 auto' }}>
@@ -1135,14 +1608,18 @@ function ServicesSection() {
             letterSpacing: '0.22em', textTransform: 'uppercase',
             color: '#C3A36A', marginBottom: 16,
           }}>
-            Servicios & Tarifas
+            <EditableText value={content.eyebrow} path={['services', 'eyebrow']} editor={editor} />
           </div>
           <h2 style={{
             fontFamily: 'Cormorant Garamond, Georgia, serif',
             fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: 600,
             color: '#1B1013', lineHeight: 1.1, marginBottom: 64,
           }}>
-            Soluciones <em style={{ color: '#4D0715', fontStyle: 'italic' }}>flexibles</em> para tu marca
+            <EditableText value={content.titlePrefix} path={['services', 'titlePrefix']} editor={editor} />{' '}
+            <em style={{ color: '#4D0715', fontStyle: 'italic' }}>
+              <EditableText value={content.titleAccent} path={['services', 'titleAccent']} editor={editor} />
+            </em>{' '}
+            <EditableText value={content.titleSuffix} path={['services', 'titleSuffix']} editor={editor} />
           </h2>
         </div>
 
@@ -1150,7 +1627,7 @@ function ServicesSection() {
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
           gap: 20, marginBottom: 32,
         }} id="tarifas">
-          {pricingCards.map((card) => (
+          {pricingCards.map((card, cardIndex) => (
             <div
               className="pricing-card"
               key={card.title}
@@ -1172,7 +1649,7 @@ function ServicesSection() {
                   letterSpacing: '0.15em', textTransform: 'uppercase',
                   backgroundColor: '#4D0715', color: '#FAF7F2', padding: '4px 12px',
                 }}>
-                  Popular
+                  <EditableText value={content.popularBadge} path={['services', 'popularBadge']} editor={editor} />
                 </div>
               )}
               <div style={{
@@ -1187,16 +1664,16 @@ function ServicesSection() {
                 fontFamily: 'Cormorant Garamond, Georgia, serif',
                 fontSize: 22, fontWeight: 600, color: '#1B1013', marginBottom: 8,
               }}>
-                {card.title}
+                <EditableText value={card.title} path={['services', 'pricingCards', cardIndex, 'title']} editor={editor} />
               </h3>
               <div style={{
                 fontFamily: 'Cormorant Garamond, Georgia, serif',
                 fontSize: 32, fontWeight: 700, color: '#4D0715', marginBottom: 24,
               }}>
-                {card.price}
+                <EditableText value={card.price} path={['services', 'pricingCards', cardIndex, 'price']} editor={editor} />
               </div>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {card.items.map((item) => (
+                {card.items.map((item, itemIndex) => (
                   <li key={item} style={{
                     display: 'flex', alignItems: 'flex-start', gap: 10,
                     fontFamily: 'Manrope, sans-serif', fontSize: 12.5, lineHeight: 1.6,
@@ -1204,12 +1681,13 @@ function ServicesSection() {
                     borderBottom: '1px solid rgba(77,7,21,0.08)', marginBottom: 8,
                   }}>
                     <span style={{ color: '#C3A36A', marginTop: 2, flexShrink: 0 }}>✦</span>
-                    {item}
+                    <EditableText value={item} path={['services', 'pricingCards', cardIndex, 'items', itemIndex]} editor={editor} />
                   </li>
                 ))}
               </ul>
               <a
                 href="#contacto"
+                onClick={(event) => editor?.isEditing && event.preventDefault()}
                 style={{
                   display: 'block', marginTop: 24, textAlign: 'center',
                   fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
@@ -1226,7 +1704,7 @@ function ServicesSection() {
                   el.style.color = card.highlight ? '#FAF7F2' : '#4D0715'
                 }}
               >
-                Solicitar →
+                <EditableText value={content.requestCta} path={['services', 'requestCta']} editor={editor} />
               </a>
             </div>
           ))}
@@ -1236,7 +1714,7 @@ function ServicesSection() {
           fontFamily: 'Manrope, sans-serif', fontSize: 11.5, lineHeight: 1.7,
           color: 'rgba(27,16,19,0.5)', textAlign: 'center', maxWidth: 640, margin: '0 auto 80px',
         }}>
-          Tarifas orientativas en pesos argentinos. El presupuesto final puede variar según el brief, la complejidad de producción, los plazos y los derechos de utilización solicitados.
+          <EditableText value={content.pricingNote} path={['services', 'pricingNote']} editor={editor} />
         </p>
 
         {/* Process */}
@@ -1247,7 +1725,7 @@ function ServicesSection() {
               letterSpacing: '0.22em', textTransform: 'uppercase',
               color: '#C3A36A', marginBottom: 16,
             }}>
-              Mi proceso de trabajo
+              <EditableText value={content.processEyebrow} path={['services', 'processEyebrow']} editor={editor} />
             </div>
           </div>
           <div className="process-list" style={{ maxWidth: 560, margin: '0 auto', position: 'relative' }}>
@@ -1272,13 +1750,13 @@ function ServicesSection() {
                     fontFamily: 'Cormorant Garamond, Georgia, serif',
                     fontSize: 22, fontWeight: 600, color: '#1B1013', marginBottom: 6,
                   }}>
-                    {step.title}
+                    <EditableText value={step.title} path={['services', 'processSteps', i, 'title']} editor={editor} />
                   </h4>
                   <p style={{
                     fontFamily: 'Manrope, sans-serif', fontSize: 13, lineHeight: 1.7,
                     color: 'rgba(27,16,19,0.6)',
                   }}>
-                    {step.desc}
+                    <EditableText value={step.desc} path={['services', 'processSteps', i, 'desc']} editor={editor} />
                   </p>
                 </div>
               </div>
@@ -1292,12 +1770,8 @@ function ServicesSection() {
 
 // ─── Testimonials ─────────────────────────────────────────────────────────────
 
-function TestimonialsSection() {
-  const stats = [
-    { value: '+120K', label: 'Reproducciones', desc: 'Videos con alto alcance orgánico en Reels y TikTok.' },
-    { value: '100%', label: 'Contenido auténtico', desc: 'Estilo cercano que conecta con la audiencia real.' },
-    { value: '♻', label: 'Marcas que vuelven', desc: 'Relaciones a largo plazo basadas en resultados y compromiso.' },
-  ]
+function TestimonialsSection({ content, editor }: { content: PortfolioContent['testimonials']; editor?: PortfolioEditor }) {
+  const stats = content.stats
 
   return (
     <section id="resultados" style={{ backgroundColor: '#F5F0E9', padding: '96px 24px' }}>
@@ -1308,20 +1782,23 @@ function TestimonialsSection() {
             letterSpacing: '0.22em', textTransform: 'uppercase',
             color: '#C3A36A', marginBottom: 16,
           }}>
-            Lo que dicen las marcas
+            <EditableText value={content.eyebrow} path={['testimonials', 'eyebrow']} editor={editor} />
           </div>
           <h2 style={{
             fontFamily: 'Cormorant Garamond, Georgia, serif',
             fontSize: 'clamp(32px, 4vw, 52px)', fontWeight: 600,
             color: '#1B1013', lineHeight: 1.1,
           }}>
-            Resultados que <em style={{ color: '#4D0715', fontStyle: 'italic' }}>hablan por sí solos</em>
+            <EditableText value={content.titlePrefix} path={['testimonials', 'titlePrefix']} editor={editor} />{' '}
+            <em style={{ color: '#4D0715', fontStyle: 'italic' }}>
+              <EditableText value={content.titleAccent} path={['testimonials', 'titleAccent']} editor={editor} />
+            </em>
           </h2>
         </div>
 
         {/* Stat cards */}
         <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20, marginBottom: 40 }}>
-          {stats.map((s) => (
+          {stats.map((s, i) => (
             <div
               className="stat-card"
               key={s.value}
@@ -1334,20 +1811,20 @@ function TestimonialsSection() {
                 fontFamily: 'Cormorant Garamond, Georgia, serif',
                 fontSize: 48, fontWeight: 700, color: '#4D0715', lineHeight: 1, marginBottom: 8,
               }}>
-                {s.value}
+                <EditableText value={s.value} path={['testimonials', 'stats', i, 'value']} editor={editor} />
               </div>
               <div style={{
                 fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
                 color: '#1B1013', marginBottom: 12,
               }}>
-                {s.label}
+                <EditableText value={s.label} path={['testimonials', 'stats', i, 'label']} editor={editor} />
               </div>
               <p style={{
                 fontFamily: 'Manrope, sans-serif', fontSize: 13, lineHeight: 1.7,
                 color: 'rgba(27,16,19,0.6)',
               }}>
-                {s.desc}
+                <EditableText value={s.desc} path={['testimonials', 'stats', i, 'desc']} editor={editor} />
               </p>
             </div>
           ))}
@@ -1373,20 +1850,20 @@ function TestimonialsSection() {
               fontSize: 'clamp(22px, 3vw, 32px)', fontStyle: 'italic',
               color: '#FAF7F2', lineHeight: 1.5, marginBottom: 28,
             }}>
-              "Amamos el contenido. Superó nuestras expectativas, la audiencia respondió muy bien."
+              <EditableText value={content.quote} path={['testimonials', 'quote']} editor={editor} />
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{
                 width: 44, height: 44, borderRadius: '50%',
                 backgroundColor: '#77182B', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 18, fontWeight: 600, color: '#FAF7F2',
-              }}>M</div>
+              }}><EditableText value={content.authorInitial} path={['testimonials', 'authorInitial']} editor={editor} /></div>
               <div>
                 <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 13, fontWeight: 700, color: '#FAF7F2' }}>
-                  María
+                  <EditableText value={content.author} path={['testimonials', 'author']} editor={editor} />
                 </div>
                 <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 11, color: 'rgba(245,240,233,0.55)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  Garnier
+                  <EditableText value={content.company} path={['testimonials', 'company']} editor={editor} />
                 </div>
               </div>
             </div>
@@ -1399,7 +1876,36 @@ function TestimonialsSection() {
 
 // ─── Contact ──────────────────────────────────────────────────────────────────
 
-function ContactSection() {
+function ContactSection({ content, editor }: { content: PortfolioContent['contact']; editor?: PortfolioEditor }) {
+  const contactImageInputRef = useRef<HTMLInputElement | null>(null)
+  const [contactImageBusy, setContactImageBusy] = useState(false)
+  const [contactImageError, setContactImageError] = useState('')
+
+  const replaceContactImage = async (file?: File) => {
+    if (!file || !editor?.isEditing) return
+    if (!file.type.startsWith('image/')) {
+      setContactImageError('Seleccioná un archivo de imagen.')
+      return
+    }
+
+    setContactImageBusy(true)
+    setContactImageError('')
+
+    try {
+      const uploaded = await uploadPortfolioMedia(file, 'contact', 'main')
+      editor.setContent((current) => updateContentValue<ImageAsset>(current, ['contact', 'image'], (image) => ({
+        ...image,
+        src: uploaded.publicUrl,
+        storageKey: uploaded.path,
+      })))
+    } catch (error) {
+      setContactImageError(error instanceof Error ? error.message : 'No se pudo subir la imagen.')
+    } finally {
+      setContactImageBusy(false)
+      if (contactImageInputRef.current) contactImageInputRef.current.value = ''
+    }
+  }
+
   return (
     <section id="contacto" style={{ backgroundColor: '#21070D', padding: '96px 24px', position: 'relative', overflow: 'hidden' }}>
       <Sparkle size={12} className="sparkle" style={{ position: 'absolute', top: 60, right: 80, color: '#C3A36A', opacity: 0.6 } as any} />
@@ -1416,17 +1922,20 @@ function ContactSection() {
             fontSize: 'clamp(32px, 4vw, 56px)', fontWeight: 600,
             color: '#FAF7F2', lineHeight: 1.1, marginBottom: 24,
           }}>
-            Hagamos que tu producto se vea{' '}
-            <em style={{ color: '#D7AAA8', fontStyle: 'italic' }}>tan bien como se siente</em>
+            <EditableText value={content.titlePrefix} path={['contact', 'titlePrefix']} editor={editor} />{' '}
+            <em style={{ color: '#D7AAA8', fontStyle: 'italic' }}>
+              <EditableText value={content.titleAccent} path={['contact', 'titleAccent']} editor={editor} />
+            </em>
           </h2>
           <p style={{
             fontFamily: 'Manrope, sans-serif', fontSize: 14, lineHeight: 1.8,
             color: 'rgba(245,240,233,0.65)', marginBottom: 40,
           }}>
-            Creo contenido auténtico y visualmente cuidado para ayudar a las marcas a conectar con su audiencia de una forma cercana y natural.
+            <EditableText value={content.description} path={['contact', 'description']} editor={editor} />
           </p>
           <a
-            href="mailto:jenniferaldana48@gmail.com"
+            href={content.emailHref}
+            onClick={(event) => editor?.isEditing && event.preventDefault()}
             style={{
               display: 'inline-block',
               fontFamily: 'Manrope, sans-serif', fontSize: 11, fontWeight: 700,
@@ -1438,12 +1947,12 @@ function ContactSection() {
             onMouseEnter={(e) => ((e.target as HTMLElement).style.backgroundColor = '#FAF7F2')}
             onMouseLeave={(e) => ((e.target as HTMLElement).style.backgroundColor = '#C3A36A')}
           >
-            Trabajemos juntos →
+            <EditableText value={content.cta} path={['contact', 'cta']} editor={editor} />
           </a>
         </div>
 
         {/* Center — oval photo */}
-        <div className="contact-photo-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
+        <div className="contact-photo-wrap" style={{ display: 'flex', justifyContent: 'center', position: 'relative' }}>
           <div className="contact-photo" style={{
             width: 140, height: 180,
             borderRadius: '50%',
@@ -1453,22 +1962,38 @@ function ContactSection() {
             boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
           }}>
             <img
-              src="https://images.unsplash.com/photo-1670201203116-26644750a726?w=280&h=360&fit=crop&auto=format&q=80"
-              alt="Jennifer Wohl"
+              src={content.image.src}
+              alt={content.image.alt}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
           </div>
+          {editor?.isEditing ? (
+            <>
+              <input
+                ref={contactImageInputRef}
+                className="admin-contact-image-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                aria-label="Seleccionar nueva foto de contacto"
+                onChange={(event) => void replaceContactImage(event.target.files?.[0])}
+              />
+              <button
+                type="button"
+                className="admin-contact-image-button"
+                disabled={contactImageBusy}
+                onClick={() => contactImageInputRef.current?.click()}
+              >
+                <span aria-hidden="true">↑</span>
+                {contactImageBusy ? 'Subiendo...' : 'Cambiar foto'}
+              </button>
+              {contactImageError ? <p className="admin-contact-image-error">{contactImageError}</p> : null}
+            </>
+          ) : null}
         </div>
 
         {/* Right — contact info */}
         <div>
-          {[
-            { icon: <IconWhatsApp />, label: 'WhatsApp', value: '+54 9 11 5583-8867', href: 'https://wa.me/5491155838867' },
-            { icon: <IconEmail />, label: 'Email', value: 'jenniferaldana48@gmail.com', href: 'mailto:jenniferaldana48@gmail.com' },
-            { icon: <IconInstagram />, label: 'Instagram', value: '@jennii.wohl', href: 'https://instagram.com/jennii.wohl' },
-            { icon: <IconTikTok />, label: 'TikTok', value: '@jenniii.wohl', href: 'https://tiktok.com/@jenniii.wohl' },
-            { icon: <IconMapPin />, label: 'Ubicación', value: 'Benavídez, Buenos Aires, Argentina', href: null },
-          ].map((item) => (
+          {content.info.map((item, i) => (
             <div
               key={item.label}
               style={{
@@ -1478,22 +2003,22 @@ function ContactSection() {
               }}
             >
               <div style={{ color: '#C3A36A', flexShrink: 0, width: 20, display: 'flex', alignItems: 'center' }}>
-                {item.icon}
+                {getContactIcon(item.icon)}
               </div>
               <div>
                 <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(245,240,233,0.4)', marginBottom: 2 }}>
-                  {item.label}
+                  <EditableText value={item.label} path={['contact', 'info', i, 'label']} editor={editor} />
                 </div>
                 {item.href ? (
-                  <a href={item.href} style={{ fontFamily: 'Manrope, sans-serif', fontSize: 13, color: '#FAF7F2', textDecoration: 'none', transition: 'color 0.2s' }}
+                  <a href={item.href} onClick={(event) => editor?.isEditing && event.preventDefault()} style={{ fontFamily: 'Manrope, sans-serif', fontSize: 13, color: '#FAF7F2', textDecoration: 'none', transition: 'color 0.2s' }}
                     onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#C3A36A')}
                     onMouseLeave={(e) => ((e.target as HTMLElement).style.color = '#FAF7F2')}
                   >
-                    {item.value}
+                    <EditableText value={item.value} path={['contact', 'info', i, 'value']} editor={editor} />
                   </a>
                 ) : (
                   <span style={{ fontFamily: 'Manrope, sans-serif', fontSize: 13, color: '#FAF7F2' }}>
-                    {item.value}
+                    <EditableText value={item.value} path={['contact', 'info', i, 'value']} editor={editor} />
                   </span>
                 )}
               </div>
@@ -1516,7 +2041,7 @@ function ContactSection() {
 
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
-function Footer() {
+function Footer({ content, editor }: { content: PortfolioContent['footer']; editor?: PortfolioEditor }) {
   return (
     <footer style={{
       backgroundColor: '#21070D',
@@ -1534,37 +2059,36 @@ function Footer() {
             border: '1px solid rgba(195,163,106,0.4)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <span style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 18, fontWeight: 600, color: '#C3A36A' }}>JW</span>
+            <span style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 18, fontWeight: 600, color: '#C3A36A' }}>
+              <EditableText value={content.monogram} path={['footer', 'monogram']} editor={editor} />
+            </span>
           </div>
           <div>
             <div style={{ fontFamily: 'Cormorant Garamond, Georgia, serif', fontSize: 14, color: '#FAF7F2', letterSpacing: '0.1em' }}>
-              Jennifer Wohl
+              <EditableText value={content.name} path={['footer', 'name']} editor={editor} />
             </div>
             <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,240,233,0.4)' }}>
-              UGC Creator
+              <EditableText value={content.role} path={['footer', 'role']} editor={editor} />
             </div>
           </div>
         </div>
 
         <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: 11, color: 'rgba(245,240,233,0.35)' }}>
-          © {new Date().getFullYear()} Jennifer Wohl. Todos los derechos reservados.
+          © {new Date().getFullYear()} <EditableText value={content.copyrightName} path={['footer', 'copyrightName']} editor={editor} />. Todos los derechos reservados.
         </div>
 
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          {[
-            { icon: <IconInstagram size={16} />, href: 'https://instagram.com/jennii.wohl', label: 'Instagram' },
-            { icon: <IconTikTok size={16} />, href: 'https://tiktok.com/@jenniii.wohl', label: 'TikTok' },
-            { icon: <IconEmail size={16} />, href: 'mailto:jenniferaldana48@gmail.com', label: 'Email' },
-          ].map((s) => (
+          {content.socials.map((s) => (
             <a
               key={s.label}
               href={s.href}
+              onClick={(event) => editor?.isEditing && event.preventDefault()}
               aria-label={s.label}
               style={{ color: 'rgba(245,240,233,0.45)', transition: 'color 0.2s' }}
               onMouseEnter={(e) => ((e.target as HTMLElement).style.color = '#C3A36A')}
               onMouseLeave={(e) => ((e.target as HTMLElement).style.color = 'rgba(245,240,233,0.45)')}
             >
-              {s.icon}
+              {getContactIcon(s.icon, 16)}
             </a>
           ))}
         </div>
@@ -1575,11 +2099,12 @@ function Footer() {
 
 // ─── WhatsApp Float ───────────────────────────────────────────────────────────
 
-function WhatsAppButton() {
+function WhatsAppButton({ href, disabled }: { href: string; disabled?: boolean }) {
   return (
     <a
       className="whatsapp-float"
-      href="https://wa.me/5491155838867"
+      href={href}
+      onClick={(event) => disabled && event.preventDefault()}
       aria-label="Contactar por WhatsApp"
       style={{
         position: 'fixed', bottom: 28, right: 28, zIndex: 150,
@@ -1601,27 +2126,84 @@ function WhatsAppButton() {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const isAdminPath = window.location.pathname.replace(/\/$/, '') === '/admin'
+
+  if (isAdminPath) {
+    return (
+      <AdminPage>
+        <AdminPortfolioApp />
+      </AdminPage>
+    )
+  }
+
+  return <PortfolioApp />
+}
+
+function PortfolioApp() {
+  const content = usePortfolioContent()
+
+  useEffect(() => {
+    void recordPortfolioVisit()
+  }, [])
+
+  return <PortfolioCanvas content={content} />
+}
+
+function AdminPortfolioApp() {
+  const { content, editor, save, message, saving } = useAdminPortfolioContent()
+
+  return (
+    <>
+      <AdminEditToolbar onSave={save} message={message} saving={saving} />
+      <PortfolioCanvas content={content} editor={editor} />
+    </>
+  )
+}
+
+function AdminEditToolbar({ onSave, message, saving }: { onSave: () => Promise<void>; message: string; saving: boolean }) {
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back()
+      return
+    }
+
+    window.location.assign('/')
+  }
+
+  return (
+    <div className="admin-edit-toolbar">
+      {message ? <span>{message}</span> : null}
+      <button type="button" className="admin-toolbar-secondary" onClick={goBack}>Retroceder</button>
+      <a href="/" target="_blank" rel="noreferrer" className="admin-toolbar-secondary">Ver portfolio</a>
+      <button type="button" onClick={() => void onSave()} disabled={saving}>
+        {saving ? 'Guardando...' : 'Guardar'}
+      </button>
+    </div>
+  )
+}
+
+function PortfolioCanvas({ content, editor }: { content: PortfolioContent; editor?: PortfolioEditor }) {
   const introRef = useRef<HTMLDivElement | null>(null)
   useHeroIntroAnimation(introRef)
   useScrollFrameBackground(introRef)
 
   return (
-    <div ref={introRef} className="animated-background-page" style={{ minHeight: '100vh' }}>
-      <Navbar />
+    <div ref={introRef} className={`animated-background-page${editor?.isEditing ? ' admin-edit-mode' : ''}`} style={{ minHeight: '100vh' }}>
+      <Navbar content={content.nav} editor={editor} />
       <main>
         <div id="intro-sequence">
-          <HeroSection />
-          <AboutSection />
-          <BrandsSection />
-          <ContentFormatsSection />
+          <HeroSection content={content.hero} editor={editor} />
+          <AboutSection content={content.about} editor={editor} />
+          <BrandsSection content={content.brands} editor={editor} />
+          <ContentFormatsSection content={content.formats} editor={editor} />
         </div>
-        <VideoPortfolioSection />
-        <ServicesSection />
-        <TestimonialsSection />
-        <ContactSection />
+        <VideoPortfolioSection content={content.videos} editor={editor} />
+        <ServicesSection content={content.services} editor={editor} />
+        <TestimonialsSection content={content.testimonials} editor={editor} />
+        <ContactSection content={content.contact} editor={editor} />
       </main>
-      <Footer />
-      <WhatsAppButton />
+      <Footer content={content.footer} editor={editor} />
+      <WhatsAppButton href={content.whatsappHref} disabled={editor?.isEditing} />
     </div>
   )
 }
