@@ -1634,11 +1634,17 @@ function captureVideoPoster(file: File): Promise<string> {
 }
 
 function cropImageToPortrait(src: string, crop: Area): Promise<string> {
+  return cropImageToSize(src, crop, 540, 972)
+}
+
+function cropImageToContact(src: string, crop: Area): Promise<string> {
+  return cropImageToSize(src, crop, 700, 900)
+}
+
+function cropImageToSize(src: string, crop: Area, width: number, height: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.onload = () => {
-      const width = 540
-      const height = 972
       const canvas = document.createElement('canvas')
       const context = canvas.getContext('2d')
 
@@ -1948,20 +1954,152 @@ function TestimonialsSection({ content, editor }: { content: PortfolioContent['t
 
 // ─── Contact ──────────────────────────────────────────────────────────────────
 
-function ContactSection({ content, editor }: { content: PortfolioContent['contact']; editor?: PortfolioEditor }) {
-  const contactImageInputRef = useRef<HTMLInputElement | null>(null)
-  const [contactImageBusy, setContactImageBusy] = useState(false)
-  const [contactImageError, setContactImageError] = useState('')
+function ContactImageEditorModal({
+  image,
+  fileName,
+  onClose,
+  onApply,
+}: {
+  image: string
+  fileName: string
+  onClose: () => void
+  onApply: (file: File) => Promise<void>
+}) {
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
-  const replaceContactImage = async (file?: File) => {
-    if (!file || !editor?.isEditing) return
-    if (!file.type.startsWith('image/')) {
-      setContactImageError('Seleccioná un archivo de imagen.')
+  const handleApply = async () => {
+    if (!croppedAreaPixels) {
+      setError('La imagen todavía se está preparando.')
       return
     }
 
-    setContactImageBusy(true)
+    setBusy(true)
+    setError('')
+
+    try {
+      const croppedImage = await cropImageToContact(image, croppedAreaPixels)
+      const baseName = fileName.replace(/\.[^.]+$/, '') || 'contacto'
+      const croppedFile = await dataUrlToFile(croppedImage, `${baseName}-recortada.jpg`)
+      await onApply(croppedFile)
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'No se pudo preparar la imagen.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="admin-video-modal" onClick={busy ? undefined : onClose}>
+      <div className="admin-video-modal-card admin-contact-crop-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-video-modal-header">
+          <div>
+            <p className="admin-kicker">Foto de contacto</p>
+            <h2>Encuadrar foto</h2>
+          </div>
+          <button type="button" onClick={onClose} disabled={busy} aria-label="Cerrar">
+            <IconClose />
+          </button>
+        </div>
+
+        <div className="admin-contact-crop-body">
+          <div className="admin-cover-editor">
+            <div className="admin-cover-frame admin-contact-crop-frame">
+              <Suspense fallback={<span>Preparando...</span>}>
+                <CoverCropper
+                  image={image}
+                  crop={crop}
+                  zoom={zoom}
+                  minZoom={1}
+                  maxZoom={4}
+                  zoomSpeed={0.25}
+                  aspect={7 / 9}
+                  cropShape="round"
+                  objectFit="cover"
+                  showGrid
+                  zoomWithScroll
+                  restrictPosition
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={(_area, pixels) => setCroppedAreaPixels(pixels)}
+                  classes={{
+                    containerClassName: 'admin-cover-cropper',
+                    cropAreaClassName: 'admin-cover-crop-area admin-contact-crop-area',
+                  }}
+                />
+              </Suspense>
+            </div>
+            <div className="admin-cover-zoom-control">
+              <span aria-hidden="true">−</span>
+              <label>
+                <span className="admin-visually-hidden">Zoom</span>
+                <input type="range" min="1" max="4" step="0.02" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+              </label>
+              <span aria-hidden="true">+</span>
+              <output>{Math.round(zoom * 100)}%</output>
+            </div>
+            <button
+              type="button"
+              className="admin-cover-reset"
+              onClick={() => {
+                setCrop({ x: 0, y: 0 })
+                setZoom(1)
+              }}
+            >
+              Centrar
+            </button>
+          </div>
+        </div>
+
+        {error ? <p className="admin-error admin-contact-crop-error">{error}</p> : null}
+
+        <div className="admin-video-modal-actions">
+          <button type="button" className="admin-secondary-action" onClick={onClose} disabled={busy}>Cancelar</button>
+          <button type="button" onClick={() => void handleApply()} disabled={busy}>
+            {busy ? 'Subiendo...' : 'Aplicar foto'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ContactSection({ content, editor }: { content: PortfolioContent['contact']; editor?: PortfolioEditor }) {
+  const contactImageInputRef = useRef<HTMLInputElement | null>(null)
+  const [contactImageFile, setContactImageFile] = useState<File | null>(null)
+  const [contactImagePreview, setContactImagePreview] = useState('')
+  const [contactImageError, setContactImageError] = useState('')
+
+  useEffect(() => {
+    return () => {
+      if (contactImagePreview.startsWith('blob:')) URL.revokeObjectURL(contactImagePreview)
+    }
+  }, [contactImagePreview])
+
+  const closeContactImageEditor = () => {
+    setContactImagePreview('')
+    setContactImageFile(null)
+    if (contactImageInputRef.current) contactImageInputRef.current.value = ''
+  }
+
+  const selectContactImage = (file?: File) => {
+    if (!file || !editor?.isEditing) return
+    if (!file.type.startsWith('image/')) {
+      setContactImageError('Seleccioná un archivo de imagen.')
+      if (contactImageInputRef.current) contactImageInputRef.current.value = ''
+      return
+    }
+
     setContactImageError('')
+    setContactImageFile(file)
+    setContactImagePreview(URL.createObjectURL(file))
+  }
+
+  const replaceContactImage = async (file: File) => {
+    if (!editor?.isEditing) throw new Error('El editor no está disponible.')
 
     try {
       const uploaded = await uploadPortfolioMedia(file, 'contact', 'main')
@@ -1970,11 +2108,9 @@ function ContactSection({ content, editor }: { content: PortfolioContent['contac
         src: uploaded.publicUrl,
         storageKey: uploaded.path,
       })))
+      closeContactImageEditor()
     } catch (error) {
-      setContactImageError(error instanceof Error ? error.message : 'No se pudo subir la imagen.')
-    } finally {
-      setContactImageBusy(false)
-      if (contactImageInputRef.current) contactImageInputRef.current.value = ''
+      throw new Error(error instanceof Error ? error.message : 'No se pudo subir la imagen.')
     }
   }
 
@@ -2047,18 +2183,25 @@ function ContactSection({ content, editor }: { content: PortfolioContent['contac
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
                 aria-label="Seleccionar nueva foto de contacto"
-                onChange={(event) => void replaceContactImage(event.target.files?.[0])}
+                onChange={(event) => selectContactImage(event.target.files?.[0])}
               />
               <button
                 type="button"
                 className="admin-contact-image-button"
-                disabled={contactImageBusy}
                 onClick={() => contactImageInputRef.current?.click()}
               >
                 <span aria-hidden="true">↑</span>
-                {contactImageBusy ? 'Subiendo...' : 'Cambiar foto'}
+                Cambiar foto
               </button>
               {contactImageError ? <p className="admin-contact-image-error">{contactImageError}</p> : null}
+              {contactImageFile && contactImagePreview ? (
+                <ContactImageEditorModal
+                  image={contactImagePreview}
+                  fileName={contactImageFile.name}
+                  onClose={closeContactImageEditor}
+                  onApply={replaceContactImage}
+                />
+              ) : null}
             </>
           ) : null}
         </div>

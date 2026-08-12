@@ -1237,6 +1237,33 @@ svg {
   box-shadow: 0 0 0 9999em rgba(23, 5, 9, 0.64) !important;
 }
 
+.admin-contact-crop-modal {
+  width: min(100%, 560px);
+}
+
+.admin-contact-crop-body {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.admin-contact-crop-body .admin-cover-editor {
+  width: min(100%, 320px);
+}
+
+.admin-contact-crop-frame {
+  width: min(100%, 280px);
+  aspect-ratio: 7 / 9;
+}
+
+.admin-contact-crop-area {
+  border-radius: 50% !important;
+}
+
+.admin-contact-crop-error {
+  margin: 0 24px 18px;
+}
+
 .admin-cover-zoom-control {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) 18px 48px;
@@ -1344,5 +1371,9 @@ svg {
 
   .admin-cover-frame {
     width: min(100%, 210px);
+  }
+
+  .admin-contact-crop-frame {
+    width: min(100%, 230px);
   }
 }
