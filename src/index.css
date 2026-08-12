@@ -1191,6 +1191,35 @@ svg {
   color: rgba(27, 16, 19, 0.62);
 }
 
+.admin-input-hint {
+  color: rgba(27, 16, 19, 0.52);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.admin-selected-file {
+  overflow: hidden;
+  color: #4D0715;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.admin-video-status {
+  margin: 0 24px 16px;
+  color: #4D0715;
+  font-family: 'Manrope', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .admin-video-form input,
 .admin-cover-editor input {
   width: 100%;

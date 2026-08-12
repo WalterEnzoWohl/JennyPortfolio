@@ -15,6 +15,7 @@ import {
 } from './contentStorage'
 import { useHeroIntroAnimation } from './hooks/useHeroIntroAnimation'
 import { recordPortfolioVisit } from './visitTracking'
+import { formatMegabytes, MAX_SOURCE_VIDEO_BYTES, MAX_UPLOAD_VIDEO_BYTES } from './videoLimits'
 
 const CoverCropper = lazy(() => import('react-easy-crop'))
 
@@ -1100,10 +1101,10 @@ function VideoPortfolioSection({ content, editor }: { content: PortfolioContent[
     updateVideos((items) => items.filter((item) => item.id !== video.id))
   }
 
-  const saveVideo = async (video: VideoItem, file?: File, posterFile?: File) => {
+  const saveVideo = async (video: VideoItem, file?: File, posterFile?: File, onUploadProgress?: (percent: number) => void) => {
     const nextVideo = { ...video }
     const [videoUpload, posterUpload] = await Promise.all([
-      file ? uploadPortfolioMedia(file, 'video', video.id) : Promise.resolve(null),
+      file ? uploadPortfolioMedia(file, 'video', video.id, onUploadProgress) : Promise.resolve(null),
       posterFile ? uploadPortfolioMedia(posterFile, 'cover', video.id) : Promise.resolve(null),
     ])
 
@@ -1291,8 +1292,8 @@ function VideoPortfolioSection({ content, editor }: { content: PortfolioContent[
           video={editorModalVideo === 'new' ? null : editorModalVideo}
           categories={filters.filter((filter) => filter !== 'Todos')}
           onClose={() => setEditorModalVideo(null)}
-          onSave={async (video, file, posterFile) => {
-            await saveVideo(video, file, posterFile)
+          onSave={async (video, file, posterFile, onUploadProgress) => {
+            await saveVideo(video, file, posterFile, onUploadProgress)
             setEditorModalVideo(null)
           }}
         />
@@ -1377,7 +1378,7 @@ function VideoEditorModal({
   video: VideoItem | null
   categories: string[]
   onClose: () => void
-  onSave: (video: VideoItem, file?: File, posterFile?: File) => Promise<void>
+  onSave: (video: VideoItem, file?: File, posterFile?: File, onUploadProgress?: (percent: number) => void) => Promise<void>
 }) {
   const [draft, setDraft] = useState<VideoItem>(() => video ?? {
     id: createVideoId(),
@@ -1389,11 +1390,13 @@ function VideoEditorModal({
   const [videoFile, setVideoFile] = useState<File | undefined>()
   const [coverFile, setCoverFile] = useState<File | undefined>()
   const [coverPreview, setCoverPreview] = useState(draft.img)
+  const [selectedVideoLabel, setSelectedVideoLabel] = useState('')
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [videoStatus, setVideoStatus] = useState('')
 
   useEffect(() => {
     return () => {
@@ -1402,7 +1405,16 @@ function VideoEditorModal({
   }, [coverPreview])
 
   const handleVideoFile = async (file?: File) => {
+    if (file && file.size > MAX_SOURCE_VIDEO_BYTES) {
+      setVideoFile(undefined)
+      setSelectedVideoLabel('')
+      setError('El video supera el máximo permitido de 100 MB.')
+      return
+    }
+
     setVideoFile(file)
+    setSelectedVideoLabel(file ? `${file.name} · ${formatMegabytes(file.size)}` : '')
+    setError('')
     if (!file || coverFile) return
 
     try {
@@ -1445,8 +1457,21 @@ function VideoEditorModal({
     }
 
     setBusy(true)
+    setVideoStatus('')
 
     try {
+      let preparedVideoFile = videoFile
+      if (videoFile) {
+        const { prepareVideoForUpload } = await import('./videoCompression')
+        preparedVideoFile = await prepareVideoForUpload(videoFile, ({ phase, percent }) => {
+          setVideoStatus(phase === 'loading'
+            ? 'Cargando compresor...'
+            : `Comprimiendo video... ${percent}%`)
+        })
+        setVideoFile(preparedVideoFile)
+        setSelectedVideoLabel(`${preparedVideoFile.name} · ${formatMegabytes(preparedVideoFile.size)}`)
+      }
+
       let img = draft.img
       if ((coverFile || videoFile) && coverPreview) {
         if (!croppedAreaPixels) throw new Error('La portada todavía se está preparando.')
@@ -1459,11 +1484,18 @@ function VideoEditorModal({
         ? await dataUrlToFile(img, `${draft.id}-cover.jpg`)
         : undefined
 
-      await onSave({ ...draft, brand, title, cat, img }, videoFile, posterFile)
+      if (preparedVideoFile) setVideoStatus('Subiendo video... 0%')
+      await onSave(
+        { ...draft, brand, title, cat, img },
+        preparedVideoFile,
+        posterFile,
+        preparedVideoFile ? (percent) => setVideoStatus(`Subiendo video... ${percent}%`) : undefined,
+      )
     } catch (error) {
       setError(error instanceof Error ? error.message : 'No se pudo guardar el video.')
     } finally {
       setBusy(false)
+      setVideoStatus('')
     }
   }
 
@@ -1500,6 +1532,10 @@ function VideoEditorModal({
             <label>
               Video
               <input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(event) => void handleVideoFile(event.target.files?.[0])} />
+              {selectedVideoLabel ? <span className="admin-selected-file">{selectedVideoLabel}</span> : null}
+              <span className="admin-input-hint">
+                Hasta 100 MB. Los archivos de más de {formatMegabytes(MAX_UPLOAD_VIDEO_BYTES)} se comprimen automáticamente.
+              </span>
             </label>
             <label>
               Foto de portada
@@ -1559,12 +1595,13 @@ function VideoEditorModal({
           </div>
         </div>
 
+        {videoStatus ? <p className="admin-video-status" role="status">{videoStatus}</p> : null}
         {error && <p className="admin-error">{error}</p>}
 
         <div className="admin-video-modal-actions">
           <button type="button" className="admin-secondary-action" onClick={onClose}>Cancelar</button>
           <button type="button" onClick={() => void handleSubmit()} disabled={busy}>
-            {busy ? 'Subiendo...' : 'Aplicar'}
+            {busy ? 'Procesando...' : 'Aplicar'}
           </button>
         </div>
       </div>

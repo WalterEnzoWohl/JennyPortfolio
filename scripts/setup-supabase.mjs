@@ -45,6 +45,7 @@ if (existingAdmin) {
 await ensureBucket(mediaBucket, {
   public: true,
   allowedMimeTypes: ['application/json', 'image/*', 'video/*'],
+  fileSizeLimit: 50 * 1024 * 1024,
 })
 await ensureBucket(analyticsBucket, {
   public: false,

@@ -83,6 +83,7 @@ export async function uploadPortfolioMedia(
   file: File,
   kind: 'video' | 'cover' | 'contact',
   itemId: string,
+  onProgress?: (percent: number) => void,
 ): Promise<UploadResult> {
   const upload = await invokeAdminApi<UploadUrlResponse>({
     action: 'create-upload-url',
@@ -100,6 +101,7 @@ export async function uploadPortfolioMedia(
     })
 
   if (error) throw new Error(error.message)
+  onProgress?.(100)
   return { path: upload.path, publicUrl: upload.publicUrl }
 }
 
