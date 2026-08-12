@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction, type SVGProps } from 'react'
+import { lazy, Suspense, useState, useEffect, useRef, type CSSProperties, type Dispatch, type RefObject, type SetStateAction, type SVGProps } from 'react'
+import type { Area, Point } from 'react-easy-crop'
+import 'react-easy-crop/react-easy-crop.css'
 import AdminPage from './AdminPage'
 import type { ContactIcon, ImageAsset, PortfolioContent, VideoItem } from './content'
 import {
@@ -13,6 +15,8 @@ import {
 } from './contentStorage'
 import { useHeroIntroAnimation } from './hooks/useHeroIntroAnimation'
 import { recordPortfolioVisit } from './visitTracking'
+
+const CoverCropper = lazy(() => import('react-easy-crop'))
 
 type ScrollFrameSequence = {
   id: 'landscape' | 'portrait'
@@ -191,11 +195,15 @@ type EditableTextProps = {
 }
 
 function useAdminPortfolioContent() {
-  const [content, setContent] = useState<PortfolioContent>(() => readStoredContent())
+  const initialContentRef = useRef<PortfolioContent>(readStoredContent())
+  const [content, setContentState] = useState<PortfolioContent>(initialContentRef.current)
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
+  const [undoDepth, setUndoDepth] = useState(0)
   const objectUrlsRef = useRef<string[]>([])
-  const persistedContentRef = useRef<PortfolioContent>(readStoredContent())
+  const persistedContentRef = useRef<PortfolioContent>(cloneContent(initialContentRef.current))
+  const contentRef = useRef<PortfolioContent>(initialContentRef.current)
+  const historyRef = useRef<PortfolioContent[]>([])
 
   useEffect(() => {
     let active = true
@@ -209,7 +217,10 @@ function useAdminPortfolioContent() {
         objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
         objectUrlsRef.current = hydrated.objectUrls
         persistedContentRef.current = cloneContent(hydrated.content)
-        setContent(hydrated.content)
+        contentRef.current = hydrated.content
+        historyRef.current = []
+        setUndoDepth(0)
+        setContentState(hydrated.content)
       } catch {
         if (active) setMessage('No se pudo cargar el contenido de Supabase.')
       }
@@ -223,6 +234,28 @@ function useAdminPortfolioContent() {
       objectUrlsRef.current = []
     }
   }, [])
+
+  const setContent: Dispatch<SetStateAction<PortfolioContent>> = (action) => {
+    const current = contentRef.current
+    const next = typeof action === 'function' ? action(current) : action
+    if (next === current || JSON.stringify(next) === JSON.stringify(current)) return
+
+    historyRef.current = [...historyRef.current.slice(-49), cloneContent(current)]
+    contentRef.current = next
+    setUndoDepth(historyRef.current.length)
+    setContentState(next)
+    setMessage('')
+  }
+
+  const undo = () => {
+    const previous = historyRef.current.pop()
+    if (!previous) return
+
+    contentRef.current = previous
+    setContentState(previous)
+    setUndoDepth(historyRef.current.length)
+    setMessage('Último cambio deshecho.')
+  }
 
   const save = async () => {
     setSaving(true)
@@ -251,7 +284,7 @@ function useAdminPortfolioContent() {
     setContent,
   }
 
-  return { content, setContent, editor, save, message, saving, setMessage }
+  return { content, editor, save, undo, canUndo: undoDepth > 0, message, saving }
 }
 
 function EditableText({ value, path, editor, className, style, as = 'span' }: EditableTextProps) {
@@ -1084,13 +1117,18 @@ function VideoPortfolioSection({ content, editor }: { content: PortfolioContent[
       nextVideo.img = posterUpload.publicUrl
     }
 
-    updateVideos((items) => {
-      const exists = items.some((item) => item.id === nextVideo.id)
-      return exists ? items.map((item) => item.id === nextVideo.id ? nextVideo : item) : [nextVideo, ...items]
+    editor?.setContent((current) => {
+      let next = updateContentValue<VideoItem[]>(current, ['videos', 'items'], (items) => {
+        const exists = items.some((item) => item.id === nextVideo.id)
+        return exists ? items.map((item) => item.id === nextVideo.id ? nextVideo : item) : [nextVideo, ...items]
+      })
+
+      if (!next.videos.filters.includes(nextVideo.cat)) {
+        next = updateContentValue<string[]>(next, ['videos', 'filters'], (items) => [...items, nextVideo.cat])
+      }
+
+      return next
     })
-    if (!content.filters.includes(nextVideo.cat)) {
-      editor?.setContent((current) => updateContentValue<string[]>(current, ['videos', 'filters'], (items) => [...items, nextVideo.cat]))
-    }
   }
 
   return (
@@ -1351,7 +1389,9 @@ function VideoEditorModal({
   const [videoFile, setVideoFile] = useState<File | undefined>()
   const [coverFile, setCoverFile] = useState<File | undefined>()
   const [coverPreview, setCoverPreview] = useState(draft.img)
-  const [crop, setCrop] = useState({ x: 50, y: 50, zoom: 1 })
+  const [crop, setCrop] = useState<Point>({ x: 0, y: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -1369,6 +1409,8 @@ function VideoEditorModal({
       const poster = await captureVideoPoster(file)
       setCoverPreview(poster)
       setDraft((current) => ({ ...current, img: poster }))
+      setCrop({ x: 0, y: 0 })
+      setZoom(1)
     } catch {
       setError('No pude leer la portada automática del video.')
     }
@@ -1381,7 +1423,9 @@ function VideoEditorModal({
 
     if (coverPreview.startsWith('blob:')) URL.revokeObjectURL(coverPreview)
     setCoverPreview(URL.createObjectURL(file))
-    setCrop({ x: 50, y: 50, zoom: 1 })
+    setCrop({ x: 0, y: 0 })
+    setZoom(1)
+    setCroppedAreaPixels(null)
   }
 
   const handleSubmit = async () => {
@@ -1404,8 +1448,9 @@ function VideoEditorModal({
 
     try {
       let img = draft.img
-      if (coverFile) {
-        img = await cropImageToPortrait(coverPreview, crop)
+      if ((coverFile || videoFile) && coverPreview) {
+        if (!croppedAreaPixels) throw new Error('La portada todavía se está preparando.')
+        img = await cropImageToPortrait(coverPreview, croppedAreaPixels)
       } else if (!img && videoFile) {
         img = await captureVideoPoster(videoFile)
       }
@@ -1465,30 +1510,52 @@ function VideoEditorModal({
           <div className="admin-cover-editor">
             <div className="admin-cover-frame">
               {coverPreview ? (
-                <img
-                  src={coverPreview}
-                  alt=""
-                  style={{
-                    objectPosition: `${crop.x}% ${crop.y}%`,
-                    transform: `scale(${crop.zoom})`,
-                  }}
-                />
+                <Suspense fallback={<span>Preparando...</span>}>
+                  <CoverCropper
+                    image={coverPreview}
+                    crop={crop}
+                    zoom={zoom}
+                    minZoom={1}
+                    maxZoom={4}
+                    zoomSpeed={0.25}
+                    aspect={5 / 9}
+                    objectFit="cover"
+                    showGrid
+                    zoomWithScroll
+                    restrictPosition
+                    onCropChange={setCrop}
+                    onZoomChange={setZoom}
+                    onCropComplete={(_area, pixels) => setCroppedAreaPixels(pixels)}
+                    classes={{
+                      containerClassName: 'admin-cover-cropper',
+                      cropAreaClassName: 'admin-cover-crop-area',
+                    }}
+                  />
+                </Suspense>
               ) : (
                 <span>Portada</span>
               )}
             </div>
-            <label>
-              Zoom
-              <input type="range" min="1" max="2.2" step="0.05" value={crop.zoom} onChange={(event) => setCrop({ ...crop, zoom: Number(event.target.value) })} />
-            </label>
-            <label>
-              Horizontal
-              <input type="range" min="0" max="100" value={crop.x} onChange={(event) => setCrop({ ...crop, x: Number(event.target.value) })} />
-            </label>
-            <label>
-              Vertical
-              <input type="range" min="0" max="100" value={crop.y} onChange={(event) => setCrop({ ...crop, y: Number(event.target.value) })} />
-            </label>
+            <div className="admin-cover-zoom-control">
+              <span aria-hidden="true">−</span>
+              <label>
+                <span className="admin-visually-hidden">Zoom</span>
+                <input type="range" min="1" max="4" step="0.02" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+              </label>
+              <span aria-hidden="true">+</span>
+              <output>{Math.round(zoom * 100)}%</output>
+            </div>
+            <button
+              type="button"
+              className="admin-cover-reset"
+              disabled={!coverPreview}
+              onClick={() => {
+                setCrop({ x: 0, y: 0 })
+                setZoom(1)
+              }}
+            >
+              Centrar
+            </button>
           </div>
         </div>
 
@@ -1566,17 +1633,12 @@ function captureVideoPoster(file: File): Promise<string> {
   })
 }
 
-function cropImageToPortrait(src: string, crop: { x: number; y: number; zoom: number }): Promise<string> {
+function cropImageToPortrait(src: string, crop: Area): Promise<string> {
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.onload = () => {
       const width = 540
       const height = 972
-      const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * crop.zoom
-      const drawWidth = image.naturalWidth * scale
-      const drawHeight = image.naturalHeight * scale
-      const dx = drawWidth <= width ? (width - drawWidth) / 2 : (width - drawWidth) * (crop.x / 100)
-      const dy = drawHeight <= height ? (height - drawHeight) / 2 : (height - drawHeight) * (crop.y / 100)
       const canvas = document.createElement('canvas')
       const context = canvas.getContext('2d')
 
@@ -1587,7 +1649,17 @@ function cropImageToPortrait(src: string, crop: { x: number; y: number; zoom: nu
 
       canvas.width = width
       canvas.height = height
-      context.drawImage(image, dx, dy, drawWidth, drawHeight)
+      context.drawImage(
+        image,
+        Math.max(0, crop.x),
+        Math.max(0, crop.y),
+        Math.min(crop.width, image.naturalWidth),
+        Math.min(crop.height, image.naturalHeight),
+        0,
+        0,
+        width,
+        height,
+      )
       resolve(canvas.toDataURL('image/jpeg', 0.88))
     }
     image.onerror = () => reject(new Error('Could not load cover'))
@@ -2150,30 +2222,33 @@ function PortfolioApp() {
 }
 
 function AdminPortfolioApp() {
-  const { content, editor, save, message, saving } = useAdminPortfolioContent()
+  const { content, editor, save, undo, canUndo, message, saving } = useAdminPortfolioContent()
 
   return (
     <>
-      <AdminEditToolbar onSave={save} message={message} saving={saving} />
+      <AdminEditToolbar onSave={save} onUndo={undo} canUndo={canUndo} message={message} saving={saving} />
       <PortfolioCanvas content={content} editor={editor} />
     </>
   )
 }
 
-function AdminEditToolbar({ onSave, message, saving }: { onSave: () => Promise<void>; message: string; saving: boolean }) {
-  const goBack = () => {
-    if (window.history.length > 1) {
-      window.history.back()
-      return
-    }
-
-    window.location.assign('/')
-  }
-
+function AdminEditToolbar({
+  onSave,
+  onUndo,
+  canUndo,
+  message,
+  saving,
+}: {
+  onSave: () => Promise<void>
+  onUndo: () => void
+  canUndo: boolean
+  message: string
+  saving: boolean
+}) {
   return (
     <div className="admin-edit-toolbar">
       {message ? <span>{message}</span> : null}
-      <button type="button" className="admin-toolbar-secondary" onClick={goBack}>Retroceder</button>
+      <button type="button" className="admin-toolbar-secondary" onClick={onUndo} disabled={!canUndo || saving}>Retroceder</button>
       <a href="/" target="_blank" rel="noreferrer" className="admin-toolbar-secondary">Ver portfolio</a>
       <button type="button" onClick={() => void onSave()} disabled={saving}>
         {saving ? 'Guardando...' : 'Guardar'}

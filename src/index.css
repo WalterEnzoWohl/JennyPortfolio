@@ -1213,6 +1213,7 @@ svg {
   width: min(100%, 250px);
   aspect-ratio: 5 / 9;
   margin: 0 auto 6px;
+  position: relative;
   overflow: hidden;
   display: grid;
   place-items: center;
@@ -1222,11 +1223,68 @@ svg {
   box-shadow: 0 12px 36px rgba(33, 7, 13, 0.22);
 }
 
-.admin-cover-frame img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform-origin: center;
+.admin-cover-cropper {
+  background: #170509;
+  cursor: grab;
+}
+
+.admin-cover-cropper:active {
+  cursor: grabbing;
+}
+
+.admin-cover-crop-area {
+  border: 1px solid rgba(250, 247, 242, 0.9) !important;
+  box-shadow: 0 0 0 9999em rgba(23, 5, 9, 0.64) !important;
+}
+
+.admin-cover-zoom-control {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 18px 48px;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  color: #4D0715;
+  font-family: 'Manrope', sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.admin-cover-zoom-control label {
+  display: block;
+}
+
+.admin-cover-zoom-control output {
+  font-size: 10px;
+  letter-spacing: 0;
+  text-align: right;
+}
+
+.admin-cover-reset {
+  min-height: 38px;
+  border: 1px solid rgba(77, 7, 21, 0.3);
+  background: transparent;
+  color: #4D0715;
+  font-family: 'Manrope', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.admin-cover-reset:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.admin-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
 }
 
 .admin-video-modal-actions {
