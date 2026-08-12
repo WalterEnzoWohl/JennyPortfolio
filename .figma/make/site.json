@@ -1,7 +1,12 @@
 {
-  "description": "Create stunning web portfolio fronts effortlessly by utilizing images and prompts, perfect for designers and creatives looking to showcase their work.",
+  "title": "Jennifer Wohl | Creadora de contenido UGC",
+  "description": "Portfolio de Jennifer Wohl, creadora de contenido UGC especializada en belleza, skincare, cuidado personal y estilo de vida.",
+  "language": "es",
   "robots": {
-    "index": false
+    "index": true
+  },
+  "icons": {
+    "icon": "/favicon.svg"
   },
   "accessibility": {
     "addBypassLinks": false,

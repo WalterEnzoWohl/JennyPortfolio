@@ -25,3 +25,4 @@ Thumbs.db
 
 # Raw animation source frames; optimized frame-*.jpg files are deployed.
 public/video-jenny/[0-9][0-9].png
+.vercel
